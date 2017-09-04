@@ -251,7 +251,7 @@ local function ResetMap()
 	map[1].x = containerW / 2
 	map[1].y = containerH / 2
 
-	last_room_number = -1
+	last_room_number = 0
 	createButton(map[1])
 	setRoomNumber(map[1])
 
@@ -298,6 +298,18 @@ local default_theme = {
 
 
 local function setPOIClick(self)
+	
+	--TODO: Warning popup before de-duplicating and possibly completely
+	-- hosing the map
+	--also todo: save/restore map automatically and manually
+	
+	if (poirooms[self.poi_index] ~= nil) then
+		print ("WOAH WOAH WOAH, this point of interest was already defined as room "..poirooms[self.poi_index].index)
+		return
+	end
+	
+	poirooms[self.poi_index] = current_room
+	
 	current_room.POI_t = self.t
 	current_room.POI_c = self.c
 	recolorRoom(current_room)
@@ -521,6 +533,7 @@ local function initialize()
 		btn:SetSize(90, 18)
 		btn.t = "rune"
 		btn.c = i
+		btn.poi_index = i
 		btn:SetScript("OnClick", setPOIClick)
 		btn:SetText(color_strings[i].." Rune")
 
@@ -529,6 +542,7 @@ local function initialize()
 		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 110, -20 * i)
 		btn.t = "orb"
 		btn.c = i
+		btn.poi_index = i+5
 		btn:SetScript("OnClick", setPOIClick)
 		btn:SetText(color_strings[i].." Orb")
 
