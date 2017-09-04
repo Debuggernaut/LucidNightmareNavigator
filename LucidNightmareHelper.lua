@@ -453,7 +453,8 @@ end
 
 local function setGuidanceClick(self)
 
-	if (navtarget == 11) then
+	if (self.target == 11) then
+		navtarget = 11
 		updateNavButtonText()
 		navigate()
 		return
