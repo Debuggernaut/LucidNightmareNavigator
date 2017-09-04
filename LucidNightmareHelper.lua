@@ -178,6 +178,8 @@ local function updateWallButtonText()
 	end
 end
 
+local navigateKludge
+
 local function setCurrentRoom(r)
 	current_room = r
 	centerCam(r.x, r.y)
@@ -186,6 +188,7 @@ local function setCurrentRoom(r)
 	playerframe.tex:SetRotation(math.rad(getRotation(last_dir or north)))
 	
 	updateWallButtonText()
+	navigateKludge()
 end
 
 local function addRoom(dir)
@@ -351,9 +354,21 @@ local function resetVisited()
 end
 
 local function outputGuidance(directions)
-	print ("Hello, user!  I have detected an unexplored room ",(table.getn(directions)-1)," steps from here!")
+	local steps = (table.getn(directions)-1)
 	
 	local navString = ""
+	
+	if (navtarget == 11) then
+		if (steps ~= 1) then
+			print ("Hello, user!  I have detected an unexplored room ",steps," steps from here!")
+		else
+			navString = navString.."Unexplored room: "
+		end
+	else
+		if (steps ~= 1) then
+			print ("Hello, user!  I have detected your destination ",steps," steps from here!")
+		end
+	end
 	
 	--directions[1] is always "0" due to a lazy design decision
 	for i=2,4 do
@@ -362,6 +377,10 @@ local function outputGuidance(directions)
 			break
 		end
 		navString = navString.."Go "..direction_strings[directions[i]]..", then "
+		
+		if (i == 4) then 
+			navString = navString.."..."
+		end
 	end
 	
 	print(navString)
@@ -433,9 +452,21 @@ local function navigate()
 end
 
 local function setGuidanceClick(self)
+
+	if (navtarget == 11) then
+		updateNavButtonText()
+		navigate()
+		return
+	end
+	
 	if (poirooms[self.target] == nil) then
 		print("That target has not been discovered yet.  Navigating to the nearest unexplored territory")
 		navtarget = 11
+		updateNavButtonText()
+		navigate()
+		return
+	else
+		updateNavButtonText()
 		navigate()
 		return
 	end
@@ -449,6 +480,8 @@ end
    
 local function initialize()
 
+	navigateKludge = navigate
+	
 	if mf then 
 		mf:SetShown(not mf:IsShown())
 		return
