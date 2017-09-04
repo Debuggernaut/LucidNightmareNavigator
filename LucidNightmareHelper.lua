@@ -446,10 +446,10 @@ function importMap()
 			end
 		end
 		
-		createButton(r)
+		createButton(v)
 		
 		if (v == current_room) then
-			setCurrentRoom(room)
+			setCurrentRoom(v)
 		end
 	end
 	
