@@ -299,6 +299,10 @@ local function updateNavButtonText()
 			text = color_strings[i-5].." Rune"
 		end
 		
+		if (i == navtarget) then
+			text = "["..text.."]"
+		end
+		
 		btn:SetText(text)
 	end
 end
@@ -390,6 +394,12 @@ local function initialize()
 	wall_buttons[3]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -60)
 	wall_buttons[3]:SetSize(100, 18)
 	
+	--TODO: Figure out how to make a normal text label instead of a button
+	local btn = ng:New(addonName, "Button", nil, mf)
+	btn:SetSize(130,25)
+	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 )
+	btn:SetText("Navigation Target:")
+	
 	for i=1,11 do
 		local btn = ng:New(addonName, "Button", nil, mf)
 		btn.target = i
@@ -397,11 +407,11 @@ local function initialize()
 		guidance_buttons[i] = btn
 		
 		btn:SetSize(90, 18)
-		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 550, -20 * i)
+		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 550, -20 * i - 30)
 		
 		if (i == 11) then
 			btn:SetSize(130,25)
-			btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 * i)
+			btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 * i - 30)
 		end
 		
 		guidance_buttons[i] = btn
