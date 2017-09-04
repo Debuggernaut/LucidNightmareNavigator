@@ -168,6 +168,16 @@ local function getRotation(dir)
 	end
 end
 
+local function updateWallButtonText()
+	for i=1,4 do
+		if (current_room == nil or not current_room.walls[i]) then
+			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
+		else
+			wall_buttons[i]:SetText("Wall to the "..direction_strings[i])
+		end
+	end
+end
+
 local function setCurrentRoom(r)
 	current_room = r
 	centerCam(r.x, r.y)
@@ -175,9 +185,7 @@ local function setCurrentRoom(r)
 	playerframe:SetAllPoints()
 	playerframe.tex:SetRotation(math.rad(getRotation(last_dir or north)))
 	
-	if (updateWallButtonText ~= nil) then
-		updateWallButtonText()
-	end
+	updateWallButtonText()
 end
 
 local function addRoom(dir)
@@ -315,6 +323,26 @@ local function updateNavButtonText()
 	end
 end
 
+function dumpMap()
+	for k,v in pairs(rooms) do
+		local neighborString = ""
+		local wallString = ""
+		for i=1,4 do
+			if (v.walls[i]) then
+				wallString = wallString.."W,"
+			else
+				wallString = wallString.." ,"
+			end
+			if (v.neighbors[i] == nil) then
+				neighborString = neighborString.."X,"
+			else
+				neighborString = neighborString..v.neighbors[i].index..","
+			end
+		end
+		print("Room ",k," index ",v.index," N:[",neighborString,"] W:[",wallString,"]") 
+	end
+end
+
 local function resetVisited()
 	for k,v in pairs(rooms) do
 		v.visited = false
@@ -322,15 +350,20 @@ local function resetVisited()
 end
 
 local function outputGuidance(directions)
-	print ("Hello, user!  I have detected an unexplored room ",table.getn(directions)," steps from here!")
+	print ("Hello, user!  I have detected an unexplored room ",(table.getn(directions)-1)," steps from here!")
 	
-	for i=1,3 do
+	local navString = ""
+	
+	--directions[1] is always "0" due to a lazy design decision
+	for i=2,4 do
 		if (directions[i] == nil) then
-			print("You will have arrived at your destination!")
+			navString = navString .. "You will have arrived at your destination!"
 			break
 		end
-		print ("Go ",direction_strings[directions[i]],", then ")
+		navString = navString .."Go ",direction_strings[directions[i]],", then "
 	end
+	
+	print(navString)
 end
 
 local function navigate()
@@ -396,16 +429,6 @@ local function setGuidanceClick(self)
 		navtarget = 11
 		navigate()
 		return
-	end
-end
-
-local function updateWallButtonText()
-	for i=1,4 do
-		if (current_room == nil or not current_room.walls[i]) then
-			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
-		else
-			wall_buttons[i]:SetText("Wall to the "..direction_strings[i])
-		end
 	end
 end
 
