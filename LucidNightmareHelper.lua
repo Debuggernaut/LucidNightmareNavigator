@@ -189,10 +189,10 @@ local function setCurrentRoom(r)
 	playerframe.tex:SetRotation(math.rad(getRotation(last_dir or north)))
 	
 	updateWallButtonText()
-	navigateKludge()
 end
 
 local function addRoom(dir)
+
 	local r = newRoom()
 	current_room.neighbors[dir] = r
 
@@ -232,11 +232,13 @@ local function addRoom(dir)
 	r.y = current_room.y + offsetY
 
 	createButton(r)
+
 	setRoomNumber(r)
+
 	return r
 end
 
-local function ResetMap()
+local function EraseRooms()
 	for k,v in pairs(rooms) do
 		v.button:Hide()
 		pool[#pool + 1] = v.button
@@ -246,6 +248,10 @@ local function ResetMap()
 	wipe(map)
 
 	last_dir = north
+end
+
+local function ResetMap()
+	EraseRooms()
 
 	map[1] = newRoom()
 
@@ -269,6 +275,7 @@ local function update()
 			last_dir = dir
 			--print("-> Movement detected!  dir = ", dir, ", Neighbors: ", current_room.neighbors[dir])
 			setCurrentRoom(current_room.neighbors[dir] or addRoom(dir))
+			navigateKludge()
 		end
 	end
 
@@ -350,15 +357,108 @@ end
 eb = {}
 
 function importMap()
---	rooms, length = binser.deserialize()
-	print(eb:GetText())
+
+	print("WARNING!  You must load the map from the same room as you were when you saved the map")
+		
+	EraseRooms()
 	
-	--argh this is going to be a fucking nightmare, I hate string processing
+	local t = eb:GetText()
+	print("Loading this map:")
+	print(t)
+
+	raywashere = t
+	local l = string.len(t)
+	
+	print("Length:",l)
+	local i = 1
+	while (i <= l) do
+		--Lua seems to strip newlines out of the string when I read
+		-- it, just end rooms with a "-" token to work around it
+		local l1,l2 = string.find(t,"-",i,true)
+		if (l2 == nil) then
+			l2 = l
+		end
+		local line = string.sub(t,i,l2-1)
+		i = l2
+		--print (line)
+		
+		local substrings = {}
+		local j=1
+		local linelength = string.len(line)
+		while (j <= linelength) do 
+			local t1,t2 = string.find(line,",",j,true)
+			if (t1 == nil) then
+				t2 = l+1
+			end
+			local token = string.sub(line,j,t2-1)
+			j = t1
+						
+			substrings[#substrings+1] = token
+			
+			j = j+1
+		end
+		
+		last_room_number = #rooms
+		
+		local room = {}
+		room.index = tonumber(substrings[1])
+		if (room.index ~= nil) then 
+			room.poi_index = tonumber(substrings[2])
+			room.neighbor_indices = {}
+			for neighbor=1,4 do
+				room.neighbor_indices[neighbor] = tonumber(substrings[2+neighbor])
+			end
+			room.walls = {false, false, false, false}
+			for wall=1,4 do
+				room.walls[wall] = (substrings[6+wall]=="W")
+			end
+			room.visited=false
+			room.neighbors={}
+			
+			rooms[room.index] = room
+			
+			room.x = tonumber(substrings[11])
+			room.y = tonumber(substrings[12])
+			
+			if (substrings[13]=="current") then
+				print ("Current room is ",room.index)
+				current_room = room
+			end
+		else
+			print("Ignoring line '"..line.."'")
+		end
+		
+		i = i + 1
+		
+	end
+	
+	
+	for k,v in pairs(rooms) do
+		for neighbor=1,4 do
+			local nIndex = v.neighbor_indices[neighbor]
+			
+			if (v.neighbor_indices[neighbor] ~= nil) then 
+				if (rooms[nIndex] == nil) then
+					print("Error, room ", v.index, " indicates it's neighbors with room ",nIndex,",which was not found")
+				else
+					v.neighbors[neighbor] = rooms[nIndex]
+				end
+			end
+		end
+		
+		createButton(r)
+		
+		if (v == current_room) then
+			setCurrentRoom(room)
+		end
+	end
+	
+	
 end
 
 function dumpMap()
 
-	local serialized = "index,poi,north_neighbor,east_neighbor,south_neighbor,west_neighbor,north_wall,e_wall,s_wall,w_wall\n"
+	local serialized = "index,poi,north_neighbor,east_neighbor,south_neighbor,west_neighbor,n_wall,e_wall,s_wall,w_wall,x,y,current,-\n"
 	
 	local dirLetters = {"N","E","S","W"}
 	for k,v in pairs(rooms) do
@@ -386,7 +486,16 @@ function dumpMap()
 			end
 		end
 		
-		serialized=serialized..serializedNeighbors..serializedWalls.."\n"
+		serialized=serialized..serializedNeighbors..serializedWalls
+		serialized=serialized..","..v.x..","..v.y..","
+		
+		if (current_room == v) then
+			serialized=serialized.."current,"
+		else
+			serialized=serialized..","
+		end
+		
+		serialized=serialized.."-\n"
 		
 		print("Room ",(k-1)," index ",v.index," N:[",neighborString,"] W:[",wallString,"]")
 	end
@@ -433,6 +542,7 @@ local function outputGuidance(directions)
 end
 
 local function navigateToUnexplored()
+	
 	-- perform a depth-first traversal until you encounter an unexplored room
 	-- and then print out directions to it for the user
 	local roomstack = {}
@@ -453,6 +563,7 @@ local function navigateToUnexplored()
 	table.insert(directionsStack, tempDirections)
 	
 	while (roomstacksize > 0) do
+
 		local cur = table.remove(roomstack)
 		roomstacksize = roomstacksize - 1
 		cur.visited = true
