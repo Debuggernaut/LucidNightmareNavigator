@@ -324,22 +324,23 @@ local function updateNavButtonText()
 end
 
 function dumpMap()
+	local dirLetters = {"N","E","S","W"}
 	for k,v in pairs(rooms) do
 		local neighborString = ""
 		local wallString = ""
 		for i=1,4 do
 			if (v.walls[i]) then
-				wallString = wallString.."W,"
+				wallString = wallString..dirLetters[i]..":W,"
 			else
-				wallString = wallString.." ,"
+				wallString = wallString..dirLetters[i]..": ,"
 			end
 			if (v.neighbors[i] == nil) then
-				neighborString = neighborString.."X,"
+				neighborString = neighborString..dirLetters[i]..":X,"
 			else
-				neighborString = neighborString..v.neighbors[i].index..","
+				neighborString = neighborString..dirLetters[i]..":"..v.neighbors[i].index..","
 			end
 		end
-		print("Room ",k," index ",v.index," N:[",neighborString,"] W:[",wallString,"]") 
+		print("Room ",(k-1)," index ",v.index," N:[",neighborString,"] W:[",wallString,"]") 
 	end
 end
 
@@ -357,13 +358,67 @@ local function outputGuidance(directions)
 	--directions[1] is always "0" due to a lazy design decision
 	for i=2,4 do
 		if (directions[i] == nil) then
-			navString = navString .. "You will have arrived at your destination!"
+			navString = navString.."You will have arrived at your destination!"
 			break
 		end
-		navString = navString .."Go ",direction_strings[directions[i]],", then "
+		navString = navString.."Go "..direction_strings[directions[i]]..", then "
 	end
 	
 	print(navString)
+end
+
+local function navigateToUnexplored()
+	-- perform a depth-first traversal until you encounter an unexplored room
+	-- and then print out directions to it for the user
+	local roomstack = {}
+	local roomstacksize = 0
+	local directionsStack = {}
+	
+	resetVisited()
+	
+	-- PERFORMANCE WARNING!!! This Lua table is actually
+	-- some sort of bloated associative array, NOT a normal stack
+	table.insert(roomstack, current_room)
+	roomstacksize = roomstacksize + 1
+	
+	-- Directions: 0 is the starting point,
+	-- after that it's an array of directions taken to get
+	-- to the current room
+	local tempDirections = {0}
+	table.insert(directionsStack, tempDirections)
+	
+	while (roomstacksize > 0) do
+		local cur = table.remove(roomstack)
+		roomstacksize = roomstacksize - 1
+		cur.visited = true
+		
+		local tempDirections = table.remove(directionsStack)
+		
+		for i=1,4 do
+			if (not cur.walls[i]) then
+			
+				local newDirections = {}
+				for k,v in pairs(tempDirections) do
+					newDirections[k] = v
+				end
+				newDirections[#newDirections+1] = i
+				
+				local n = cur.neighbors[i]
+				if (n == nil) then
+					outputGuidance(newDirections)
+					return
+				else
+					if (not n.visited) then							
+						table.insert(roomstack, n)
+						roomstacksize = roomstacksize + 1
+						table.insert(directionsStack, newDirections)
+					end
+				end
+			end
+		end
+	end
+	
+	print ("Hmm, that's odd, according to this you have no unexplored territory.. maybe try navigating to some other point of interest and check the wall settings on your way ")
 end
 
 local function navigate()
@@ -373,53 +428,7 @@ local function navigate()
 	if (navtarget ~= 11) then
 		print("Navigating to a particular target not supported yet!");
 	else
-		-- perform a depth-first traversal until you encounter an unexplored room
-		-- and then print out directions to it for the user
-		local roomstack = {}
-		local roomstacksize = 0
-		local directionsStack = {}
-		
-		-- PERFORMANCE WARNING!!! This Lua table is actually
-		-- some sort of bloated associative array, NOT a normal stack
-		table.insert(roomstack, current_room)
-		roomstacksize = roomstacksize + 1
-		
-		-- Directions: 0 is the starting point,
-		-- after that it's an array of directions taken to get
-		-- to the current room
-		local tempDirections = {0}
-		table.insert(directionsStack, tempDirections)
-		
-		while (roomstacksize > 0) do
-			local cur = table.remove(roomstack)
-			roomstacksize = roomstacksize - 1
-			cur.visited = true
-			
-			local tempDirections = table.remove(directionsStack)
-			
-			for i=1,4 do
-				if (not cur.walls[i]) then
-				
-					local newDirections = {}
-					for k,v in pairs(tempDirections) do
-						newDirections[k] = v
-					end
-					newDirections[#newDirections+1] = i
-					
-					local n = cur.neighbors[i]
-					if (n == nil) then
-						outputGuidance(newDirections)
-						return
-					else
-						if (not n.visited) then							
-							table.insert(roomstack, n)
-							roomstacksize = roomstacksize + 1
-							table.insert(directionsStack, newDirections)
-						end
-					end
-				end
-			end
-		end
+		navigateToUnexplored()
 	end
 end
 
@@ -466,10 +475,11 @@ local function initialize()
 	playerframe.tex:SetAllPoints()
 	playerframe.tex:SetTexture(player_icon)
 
-	local reset = ng:New(addonName, "Button", nil, mf)
-	reset:SetPoint("BOTTOM", mf, "BOTTOM", -50, 10)
-	reset:SetScript("OnClick", ResetMap)
-	reset:SetText("Reset map")
+	-- This reset map button should no longer be necessary
+	-- local reset = ng:New(addonName, "Button", nil, mf)
+	-- reset:SetPoint("BOTTOM", mf, "BOTTOM", -50, 10)
+	-- reset:SetScript("OnClick", ResetMap)
+	-- reset:SetText("Reset map")
 
 	for i = 1,5 do
 		local btn = ng:New(addonName, "Button", nil, mf)
