@@ -246,6 +246,7 @@ local function EraseRooms()
 
 	wipe(rooms)
 	wipe(map)
+	wipe(poirooms)
 
 	last_dir = north
 end
@@ -391,7 +392,7 @@ function importMap()
 				t2 = l+1
 			end
 			local token = string.sub(line,j,t2-1)
-			j = t1
+			j = t2
 						
 			substrings[#substrings+1] = token
 			
@@ -446,7 +447,18 @@ function importMap()
 			end
 		end
 		
+		if (v.poi_index > 5) then
+			v.POI_c = v.poi_index - 5
+			v.POI_t = "rune"
+			poirooms[poi_index] = v
+		elseif (v.poi_index > 0) then
+			v.POI_c = v.poi_index
+			v.POI_t = "orb"
+			poirooms[poi_index] = v
+		end
+
 		createButton(v)
+		--recolorRoom(v)
 		
 		if (v == current_room) then
 			setCurrentRoom(v)
@@ -497,7 +509,7 @@ function dumpMap()
 		
 		serialized=serialized.."-\n"
 		
-		print("Room ",(k-1)," index ",v.index," N:[",neighborString,"] W:[",wallString,"]")
+		print("Room ",(k)," POI: ",v.poi_index," N:[",neighborString,"] W:[",wallString,"]")
 	end
 	eb:SetText(serialized)
 end
