@@ -38,6 +38,14 @@ local mf, scrollframe, container, playerframe
 local last_dir, last_room_number
 
 local wall_buttons = {}
+guidance_buttons = {}
+
+-- Help navigate to unexplored territory
+local navtarget = 11
+
+local poirooms = {}
+
+raywashere = "Hello world!"
 
 --local doors = {{{-1378, 680},{-1300,710}}, -- north
 --               {{-1440, 600},{-1410,660}}, -- east
@@ -276,6 +284,24 @@ local function setPOIClick(self)
 	recolorRoom(current_room)
 end
 
+local function updateNavButtonText()
+	for i=1,11 do
+		local btn = guidance_buttons[i]
+		
+		local text = ""
+		
+		if (i == 11) then
+			text = "Unexplored Territory"
+		elseif (i > 0 and i < 6) then 
+			--sorry, too lazy to look up >= operator in lua -WP
+			text = color_strings[i].." Orb"
+		elseif (i > 5 and i < 11) then
+			text = color_strings[i-5].." Rune"
+		end
+		
+		btn:SetText(text)
+	end
+end
 
 local function updateWallButtonText()
 	for i=1,4 do
@@ -306,7 +332,7 @@ local function initialize()
 	mf = ng:New(addonName, "Frame", nil, UIParent)
 	ng:SetFrameMovable(mf, true)
 	mf:SetPoint("CENTER")
-	mf:SetSize(500, 500)
+	mf:SetSize(700, 500)
 
 	scrollframe = CreateFrame("ScrollFrame", nil, mf)
 	scrollframe:SetAllPoints()
@@ -363,6 +389,24 @@ local function initialize()
 	wall_buttons[4]:SetSize(100, 18)
 	wall_buttons[3]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -60)
 	wall_buttons[3]:SetSize(100, 18)
+	
+	for i=1,11 do
+		local btn = ng:New(addonName, "Button", nil, mf)
+		btn.target = i
+		btn:SetScript("OnClick", setGuidanceClick)
+		guidance_buttons[i] = btn
+		
+		btn:SetSize(90, 18)
+		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 550, -20 * i)
+		
+		if (i == 11) then
+			btn:SetSize(130,25)
+			btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 * i)
+		end
+		
+		guidance_buttons[i] = btn
+	end
+	updateNavButtonText()
 
 	local btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 55, -20 * 6)
@@ -371,6 +415,8 @@ local function initialize()
 	btn.c = 6
 	btn:SetScript("OnClick", setPOIClick)
 	btn:SetText("Clear Color")
+	
+	btn:Disable()
 
 	ResetMap()
 
@@ -382,6 +428,12 @@ local function initialize()
 	hide:SetPoint("BOTTOM", mf, "BOTTOM", 50, 10)
 	hide:SetScript("OnClick", function() mf:Hide() end)
 	hide:SetText(CLOSE)
+	
+	print ("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
+	print ("-------------")
+	print ("Don't bother checking the map too carefully, because the maze is three-dimensional and it doesn't appear that every room is actually perfectly square (or the connections between them are different lengths in actual space, anyway).  This means that if you try to carefully graph everything out, you'll end up with strange overlaps, loops, and places where things don't meet up.")
+	print("The addon is going to watch you and build a map in memory, but since it can't see runes, orbs, or walls, you're going to have to help it out by clicking the buttons to indicate which walls are passable and which have rubble, and which rooms have orbs/runes.")
+	print("Please don't pick up any runes or put them in any orbs until you've found all the runes and orbs with the addon's help.  If you get lost, the addon will guide you to the nearest unexplored path or you can ask it for directions to the nearest node/rune")
 end
 
 -- slash command
