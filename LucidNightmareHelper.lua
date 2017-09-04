@@ -152,6 +152,7 @@ local function newRoom()
 	--print ("r.walls[2]: ", r.walls[2])
 	r.visited = false --used for graph traversals
 	r.index = #rooms+1
+	r.poi_index=0
 	rooms[r.index] = r
 	return r
 end
@@ -297,18 +298,26 @@ local default_theme = {
 				  }
 
 
+local poi_warned = 0
 local function setPOIClick(self)
 	
 	--TODO: Warning popup before de-duplicating and possibly completely
 	-- hosing the map
 	--also todo: save/restore map automatically and manually
 	
-	if (poirooms[self.poi_index] ~= nil) then
-		print ("WOAH WOAH WOAH, this point of interest was already defined as room "..poirooms[self.poi_index].index)
+	if (poirooms[self.poi_index] ~= nil and poi_warned ~= self.poi_index) then
+		print ("WOAH WOAH WOAH, this point of interest was already defined as room "..poirooms[self.poi_index].index.."!  Click again to confirm a loop in the map and de-duplicate nodes")
+		poi_warned = self.poi_index
 		return
 	end
 	
+	--TODO: De-duplicate
+	if (poirooms[self.poi_index] ~= nil) then
+		print("Warning, didn't de-duplicate anything!  Map is now pretty much crap now")
+		poirooms[self.poi_index].poi_index = 0
+	end
 	poirooms[self.poi_index] = current_room
+	current_room.poi_index = self.poi_index
 	
 	current_room.POI_t = self.t
 	current_room.POI_c = self.c
@@ -338,25 +347,50 @@ local function updateNavButtonText()
 	end
 end
 
+eb = {}
+
+function importMap()
+--	rooms, length = binser.deserialize()
+	print(eb:GetText())
+	
+	--argh this is going to be a fucking nightmare, I hate string processing
+end
+
 function dumpMap()
+
+	local serialized = "index,poi,north_neighbor,east_neighbor,south_neighbor,west_neighbor,north_wall,e_wall,s_wall,w_wall\n"
+	
 	local dirLetters = {"N","E","S","W"}
 	for k,v in pairs(rooms) do
+		serialized=serialized..v.index..","..v.poi_index
+		
 		local neighborString = ""
 		local wallString = ""
+		
+		local serializedNeighbors = ""
+		local serializedWalls = ""
 		for i=1,4 do
 			if (v.walls[i]) then
+				serializedWalls=serializedWalls..",W"
 				wallString = wallString..dirLetters[i]..":W,"
 			else
+				serializedWalls=serializedWalls..", "
 				wallString = wallString..dirLetters[i]..": ,"
 			end
 			if (v.neighbors[i] == nil) then
+				serializedNeighbors=serializedNeighbors..", "
 				neighborString = neighborString..dirLetters[i]..":X,"
 			else
+				serializedNeighbors=serializedNeighbors..","..v.neighbors[i].index
 				neighborString = neighborString..dirLetters[i]..":"..v.neighbors[i].index..","
 			end
 		end
-		print("Room ",(k-1)," index ",v.index," N:[",neighborString,"] W:[",wallString,"]") 
+		
+		serialized=serialized..serializedNeighbors..serializedWalls.."\n"
+		
+		print("Room ",(k-1)," index ",v.index," N:[",neighborString,"] W:[",wallString,"]")
 	end
+	eb:SetText(serialized)
 end
 
 local function resetVisited()
@@ -600,6 +634,23 @@ local function initialize()
 	btn:SetText("Clear Color")
 	
 	btn:Disable()
+	
+	eb = ng:New(addonName, "Editbox", nil, mf)
+	eb:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 20, 20)
+	eb:SetSize(110, 18)
+	eb:SetText("CTRL+A, CTRL+C")
+	
+	btn = ng:New(addonName, "Button", nil, mf)
+	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 140, 30)
+	btn:SetSize(130, 18)
+	btn:SetScript("OnClick", dumpMap)
+	btn:SetText("Export Map to Box")
+	
+	btn = ng:New(addonName, "Button", nil, mf)
+	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 140, 10)
+	btn:SetSize(130, 18)
+	btn:SetScript("OnClick", importMap)
+	btn:SetText("Import Map From Box")
 
 	ResetMap()
 
@@ -611,6 +662,8 @@ local function initialize()
 	hide:SetPoint("BOTTOM", mf, "BOTTOM", 50, 10)
 	hide:SetScript("OnClick", function() mf:Hide() end)
 	hide:SetText(CLOSE)
+	
+	--LucidNightmareHelperTooltip:SetOwner(_G["UIParent"],"ANCHOR_NONE")
 	
 	print ("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
 	print ("-------------")
