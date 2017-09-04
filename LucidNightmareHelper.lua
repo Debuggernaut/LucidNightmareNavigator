@@ -113,14 +113,14 @@ local function resetColor(r, c, t)
 end
 
 local function setRoomNumber(r)
-	last_room_number = last_room_number + 1
-	if last_room_number < 100 then
+	--last_room_number = last_room_number + 1
+	if r.index < 100 then
 		r.button.text:SetTextHeight(10)
 	else
 		r.button.text:SetTextHeight(8)
 	end
-	r.button.text:SetText("|cff000000"..last_room_number.."|r")
-	r.number = last_room_number
+	r.button.text:SetText("|cff000000"..r.index.."|r")
+	--r.number = last_room_number
 end
 
 local function recolorRoom(r)
@@ -459,6 +459,7 @@ function importMap()
 
 		createButton(v)
 		recolorRoom(v)
+		setRoomNumber(v)
 		
 		if (v == current_room) then
 			setCurrentRoom(v)
@@ -501,15 +502,18 @@ function dumpMap()
 		serialized=serialized..serializedNeighbors..serializedWalls
 		serialized=serialized..","..v.x..","..v.y..","
 		
+		local curString = ""
 		if (current_room == v) then
 			serialized=serialized.."current,"
+			curString = " (YOU ARE HERE) "
 		else
 			serialized=serialized..","
 		end
 		
 		serialized=serialized.."-\n"
 		
-		print("Room ",(k)," POI: ",v.poi_index," N:[",neighborString,"] W:[",wallString,"]")
+		
+		print("Room "..(k)..curString.." POI: ",v.poi_index," N:[",neighborString,"] W:[",wallString,"]")
 	end
 	eb:SetText(serialized)
 end
