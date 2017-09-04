@@ -32,7 +32,7 @@ local purple = 5
 
 local pool = {}
 local map = {}
-local rooms = {}
+ rooms = {}
 local current_room
 local mf, scrollframe, container, playerframe
 local last_dir, last_room_number
