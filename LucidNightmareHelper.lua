@@ -276,14 +276,24 @@ local function setPOIClick(self)
 	recolorRoom(current_room)
 end
 
+
+local function updateWallButtonText()
+	for i=1,4 do
+		if (current_room ~= nil) then
+			print("walls[i]:", current_room.walls[i])
+		end
+		if (current_room == nil or not current_room.walls[i]) then
+			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
+		else
+			wall_buttons[i]:SetText("Wall to the "..direction_strings[i])
+		end
+	end
+end
+
 local function setWallClick(self)
-	if (current_room.walls[self.dir] == 1) then
-		current_room.walls[self.dir] = 0
-	end
-	if (current_room.walls[self.dir] == 0) then
-		current_room.walls[self.dir] = 1
-	end
+	current_room.walls[self.dir] = not current_room.walls[self.dir]
 	recolorRoom(current_room)
+	updateWallButtonText()
 end
    
 local function initialize()
@@ -339,18 +349,16 @@ local function initialize()
 		-- automatic waypoints maybe in future
 	end
 
-	-- Add/remove wall buttons
+	-- Buttons to add/remove walls
 	for i = 1,4 do
 		local btn = ng:New(addonName, "Button", nil, mf)
 		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 250, -20 * i)
-		btn:SetSize(90, 18)
+		btn:SetSize(100, 18)
 		btn.dir = i
 		btn:SetScript("OnClick", setWallClick)
-		btn:SetText("Wall to the "..direction_strings[i])
 		wall_buttons[i] = btn
-
-		-- automatic waypoints maybe in future
 	end
+	updateWallButtonText()
 
 	local btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 55, -20 * 6)
