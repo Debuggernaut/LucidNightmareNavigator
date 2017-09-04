@@ -124,7 +124,7 @@ local function setRoomNumber(r)
 end
 
 local function recolorRoom(r)
-	resetColor(r, r.POI_c, r.POI_t)
+	--resetColor(r, r.POI_c, r.POI_t)
 
 	local func = r.POI_t == "rune" and r.button.SetBackdropColor or r.button.SetBackdropBorderColor
 
@@ -449,16 +449,16 @@ function importMap()
 		
 		if (v.poi_index > 5) then
 			v.POI_c = v.poi_index - 5
-			v.POI_t = "rune"
-			poirooms[poi_index] = v
+			v.POI_t = "orb"
+			poirooms[v.poi_index] = v
 		elseif (v.poi_index > 0) then
 			v.POI_c = v.poi_index
-			v.POI_t = "orb"
-			poirooms[poi_index] = v
+			v.POI_t = "rune"
+			poirooms[v.poi_index] = v
 		end
 
 		createButton(v)
-		--recolorRoom(v)
+		recolorRoom(v)
 		
 		if (v == current_room) then
 			setCurrentRoom(v)
