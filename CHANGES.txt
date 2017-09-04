@@ -1,0 +1,12 @@
+lightweight tag a1c2d288984e0daadda3a2fb84e6a9a10908efa3 v0.1.1
+Author:	Saregon <n_rhygar@yahoo.it>
+Date:	Sun Sep 3 23:27:36 2017 +0200
+
+commit a1c2d288984e0daadda3a2fb84e6a9a10908efa3
+Author: Saregon <n_rhygar@yahoo.it>
+Date:   Sun Sep 3 23:27:36 2017 +0200
+
+    - rooms can now be colored in two ways, background for runes and border
+    for orbs
+    - added room numbers
+

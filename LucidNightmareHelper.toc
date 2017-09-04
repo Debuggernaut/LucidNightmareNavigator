@@ -1,0 +1,10 @@
+## Interface: 70300
+## Title: Lucid Nightmare Helper+
+## Author: Wonderpants US - Thrall, Vildiesel EU - Well of Eternity
+## Notes: Helps to find a path inside the Endless Halls (now with graph theory!)
+## eMail: wpants@hardmodecode.com, n_rhygar@yahoo.it
+## DefaultState: Enabled
+## LoadOnDemand: 0
+## SavedVariables: 
+libs\NyxGUI-1.0\NyxGUI.xml
+LucidNightmareHelper.lua
