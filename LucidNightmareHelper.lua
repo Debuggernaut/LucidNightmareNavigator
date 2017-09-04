@@ -279,9 +279,6 @@ end
 
 local function updateWallButtonText()
 	for i=1,4 do
-		if (current_room ~= nil) then
-			print("walls[i]:", current_room.walls[i])
-		end
 		if (current_room == nil or not current_room.walls[i]) then
 			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
 		else
@@ -352,13 +349,20 @@ local function initialize()
 	-- Buttons to add/remove walls
 	for i = 1,4 do
 		local btn = ng:New(addonName, "Button", nil, mf)
-		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 250, -20 * i)
-		btn:SetSize(100, 18)
 		btn.dir = i
 		btn:SetScript("OnClick", setWallClick)
 		wall_buttons[i] = btn
 	end
 	updateWallButtonText()
+	
+	wall_buttons[1]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -20)
+	wall_buttons[1]:SetSize(100, 18)
+	wall_buttons[2]:SetPoint("TOPLEFT", mf, "TOPLEFT", 350, -40)
+	wall_buttons[2]:SetSize(100, 18)
+	wall_buttons[4]:SetPoint("TOPLEFT", mf, "TOPLEFT", 250, -40)
+	wall_buttons[4]:SetSize(100, 18)
+	wall_buttons[3]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -60)
+	wall_buttons[3]:SetSize(100, 18)
 
 	local btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 55, -20 * 6)
