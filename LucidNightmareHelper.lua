@@ -150,7 +150,9 @@ local function newRoom()
 	r.walls = {false, false, false, false}
 	--print("Making a new room")
 	--print ("r.walls[2]: ", r.walls[2])
-	rooms[#rooms + 1] = r
+	r.visited = false --used for graph traversals
+	r.index = #rooms+1
+	rooms[r.index] = r
 	return r
 end
 
@@ -171,7 +173,11 @@ local function setCurrentRoom(r)
 	centerCam(r.x, r.y)
 	playerframe:SetParent(r.button)
 	playerframe:SetAllPoints()
-	playerframe.tex:SetRotation(math.rad(getRotation(last_dir or north))) 
+	playerframe.tex:SetRotation(math.rad(getRotation(last_dir or north)))
+	
+	if (updateWallButtonText ~= nil) then
+		updateWallButtonText()
+	end
 end
 
 local function addRoom(dir)
@@ -196,6 +202,7 @@ local function addRoom(dir)
 	while true do
 		local found
 
+		-- Keep from drawing rooms on top of each other on the map
 		for k,v in pairs(rooms) do
 			if v.x == current_room.x + offsetX and v.y == current_room.y + offsetY then
 				offsetX = offsetX + dx
@@ -248,6 +255,7 @@ local function update()
 		local dir = detectDir(lx, ly)
 		if dir then
 			last_dir = dir
+			--print("-> Movement detected!  dir = ", dir, ", Neighbors: ", current_room.neighbors[dir])
 			setCurrentRoom(current_room.neighbors[dir] or addRoom(dir))
 		end
 	end
@@ -304,6 +312,90 @@ local function updateNavButtonText()
 		end
 		
 		btn:SetText(text)
+	end
+end
+
+local function resetVisited()
+	for k,v in pairs(rooms) do
+		v.visited = false
+	end
+end
+
+local function outputGuidance(directions)
+	print ("Hello, user!  I have detected an unexplored room ",table.getn(directions)," steps from here!")
+	
+	for i=1,3 do
+		if (directions[i] == nil) then
+			print("You will have arrived at your destination!")
+			break
+		end
+		print ("Go ",direction_strings[directions[i]],", then ")
+	end
+end
+
+local function navigate()
+	-- Navigates to the nearest unexplored territory, or
+	-- a particular point of interest, based on global "navtarget"
+	
+	if (navtarget ~= 11) then
+		print("Navigating to a particular target not supported yet!");
+	else
+		-- perform a depth-first traversal until you encounter an unexplored room
+		-- and then print out directions to it for the user
+		local roomstack = {}
+		local roomstacksize = 0
+		local directionsStack = {}
+		
+		-- PERFORMANCE WARNING!!! This Lua table is actually
+		-- some sort of bloated associative array, NOT a normal stack
+		table.insert(roomstack, current_room)
+		roomstacksize = roomstacksize + 1
+		
+		-- Directions: 0 is the starting point,
+		-- after that it's an array of directions taken to get
+		-- to the current room
+		local tempDirections = {0}
+		table.insert(directionsStack, tempDirections)
+		
+		while (roomstacksize > 0) do
+			local cur = table.remove(roomstack)
+			roomstacksize = roomstacksize - 1
+			cur.visited = true
+			
+			local tempDirections = table.remove(directionsStack)
+			
+			for i=1,4 do
+				if (not cur.walls[i]) then
+				
+					local newDirections = {}
+					for k,v in pairs(tempDirections) do
+						newDirections[k] = v
+					end
+					newDirections[#newDirections+1] = i
+					
+					local n = cur.neighbors[i]
+					if (n == nil) then
+						outputGuidance(newDirections)
+						return
+					else
+						if (not n.visited) then							
+							table.insert(roomstack, n)
+							roomstacksize = roomstacksize + 1
+							table.insert(directionsStack, newDirections)
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+local function setGuidanceClick(self)
+	if (poirooms[self.target] == nil) then
+		print("That target has not been discovered yet.  Navigating to the nearest unexplored territory")
+		navtarget = 11
+		navigate()
+		return
 	end
 end
 
