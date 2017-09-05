@@ -97,7 +97,7 @@ end
 local function createButton(r)
 	local btn = getUnusedButton()
 	btn:SetPoint("TOPLEFT", container, "TOPLEFT", r.x, -r.y)
-	btn:SetBackdropColor(1, 1, 1, 0.5)
+	btn:SetBackdropColor(1, 1, 1, 1)
 	btn:SetBackdropBorderColor(0, 0, 0, 0) 
 	btn:Show()
 	r.button = btn
@@ -107,7 +107,7 @@ local function resetColor(r, c, t)
 	for k,v in pairs(rooms) do
 		if v ~= r and v.POI_c == c and v.POI_t == t then
 			if t == "rune" then
-				v.button:SetBackdropColor(1, 1, 1, 0.5)
+				v.button:SetBackdropColor(1, 1, 1, 1)
 			else
 				v.button:SetBackdropBorderColor(0, 0, 0, 0)
 			end
@@ -133,17 +133,17 @@ local function recolorRoom(r)
 	local func = r.POI_t == "rune" and r.button.SetBackdropColor or r.button.SetBackdropBorderColor
 
 	if r.POI_c == yellow then
-		func(r.button, 1, 1, 0, 0.5)
+		func(r.button, 1, 1, 0, 1)
 	elseif r.POI_c == blue then
-		func(r.button, 0, 0.6, 1, 0.5)
+		func(r.button, 0, 0.6, 1, 1)
 	elseif r.POI_c == green then
-		func(r.button, 0, 1, 0, 0.5)
+		func(r.button, 0, 1, 0, 1)
 	elseif r.POI_c == purple then
-		func(r.button, 1, 0, 1, 0.5)
+		func(r.button, 1, 0, 1, 1)
 	elseif r.POI_c == red then
-		func(r.button, 1, 0, 0, 0.5)
+		func(r.button, 1, 0, 0, 1)
 	else -- clear
-		r.button:SetBackdropColor(1, 1, 1, 0.5) 
+		r.button:SetBackdropColor(1, 1, 1, 1) 
 		r.button:SetBackdropBorderColor(0, 0, 0, 0) 
 	end
 end
@@ -306,7 +306,6 @@ local default_theme = {
 				   f_button_flags = "",
 				   f_button_color = "FFFFFFFF",
 				  }
-
 			  
 local function luaSucksQueueInit(crappyLuaQueue, minIndex, maxIndex)
 	minIndex = 1
