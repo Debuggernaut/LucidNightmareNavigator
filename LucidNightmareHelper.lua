@@ -288,14 +288,14 @@ end
 
 local default_theme = {
 				   l0_color      = "000000ff",
-				   l0_border     = "191919E6",
+				   l0_border     = "191919FF",
 				   l0_texture    = "Interface\\Buttons\\GreyscaleRamp64",
-				   l3_color      = "999999cc",
-				   l3_border     = "000000aa",
+				   l3_color      = "999999FF",
+				   l3_border     = "000000FF",
 				   l3_texture    = "Interface\\Buttons\\WHITE8X8",
 				   l3_texture    = "spells\\ICETEXTURE_MAGE",
 				   thumb         = "19B219FF",
-				   highlight     = "00FFff33",
+				   highlight     = "00FFffFF",
 	              -- fonts
 				   f_label_name   = "Fonts\\FRIZQT__.ttf",
 				   f_label_h      = 11,
@@ -827,6 +827,7 @@ local function initialize()
 		btn:SetScript("OnClick", setWallClick)
 		wall_buttons[i] = btn
 		btn:SetFrameLevel(5)
+		btn.highlight:SetBlendMode("DISABLE")
 	end
 	updateWallButtonText()
 	
