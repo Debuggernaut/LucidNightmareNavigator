@@ -460,11 +460,10 @@ local function updateNavButtonText()
 		
 		if (i == 11) then
 			text = "Unexplored Territory"
-		elseif (i > 0 and i < 6) then 
-			--sorry, too lazy to look up >= operator in lua -WP
-			text = color_strings[i].." Orb"
+		elseif (i > 0 and i < 6) then
+			text = color_strings[i].." Rune"
 		elseif (i > 5 and i < 11) then
-			text = color_strings[i-5].." Rune"
+			text = color_strings[i-5].." Orb"
 		end
 		
 		if (i == navtarget) then
@@ -657,7 +656,17 @@ local function outputGuidance(directions)
 		end
 	else
 		if (steps ~= 1) then
-			print ("Hello, user!  I have detected your destination ",steps," steps from here!")
+			local destStr = ""
+			
+			if (navtarget > 5) then
+				destStr = color_strings[navtarget - 5]
+				destStr = destStr.." Orb"
+			elseif (navtarget > 0) then
+				destStr = color_strings[navtarget]
+				destStr = destStr.." Rune"
+			end
+			
+			print ("Hello, user!  I have detected your destination ("..destStr..") ",steps," steps from here!")
 		end
 	end
 	
@@ -733,12 +742,83 @@ local function navigateToUnexplored()
 	print ("Hmm, that's odd, according to this you have no unexplored territory.. maybe try navigating to some other point of interest and check the wall settings on your way ")
 end
 
+-- Navigates to global "navtarget"
+local function navigateToTarget(targetRoom, startingRoom)
+
+	if (targetRoom == nil or startingRoom == nil) then
+		return
+	end
+	
+	-- NOTE: It would be much faster in this case to simultaneously
+	-- spider out from both targetRoom and startingRoom at the same
+	-- time, then return the directions for where they meet
+	-- I don't feel like bothering to chew through all that coding,
+	-- though, so I'm going to take the extra half-assed approach
+	-- and just do a normal breadth-first traversal starting at 
+	-- startingRoom, without even bothering to cache the results or
+	-- anything (: D
+
+	local directionsQueue = {}
+	
+	resetVisited()
+		
+	local roomQueue = {}
+	local rq1 = 1
+	local rq2 = 1
+	
+	local targetQueue = {}
+	local dq1 = 1
+	local dq2 = 1
+	
+	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
+	dq1, dq2 = luaSucksQueueInit(directionsQueue, dq1, dq2)
+	
+	resetVisitedKludge()
+	
+	local tempDirections = {0}
+	
+	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, startingRoom)
+	dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, tempDirections)
+
+	while (not luaSucksQueueEmpty(roomQueue, rq1, rq2)) do
+		local cur
+		dq1, dq2, tempDirections = luaSucksQueuePop(directionsQueue, dq1, dq2)
+		rq1, rq2, cur = luaSucksQueuePop(roomQueue, rq1, rq2)
+
+		if (not cur.visited) then
+			cur.visited = true
+
+			for i=1,4 do		
+				local newDirections = {}
+				
+				local n = cur.neighbors[i]
+				local n2 = nil
+				if (n ~= nil) then
+					for k,v in pairs(tempDirections) do
+						newDirections[k] = v
+					end
+					newDirections[#newDirections+1] = i
+
+					if (n == targetRoom) then
+						--Found it!
+						outputGuidance(newDirections)
+						return
+					end
+
+					rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n)
+					dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, newDirections)
+				end
+			end
+		end
+	end
+end
+
 local function navigate()
 	-- Navigates to the nearest unexplored territory, or
 	-- a particular point of interest, based on global "navtarget"
 	
 	if (navtarget ~= 11) then
-		print("Navigating to a particular target not supported yet!");
+		navigateToTarget(poirooms[navtarget], current_room)
 	else
 		navigateToUnexplored()
 	end
@@ -760,6 +840,7 @@ local function setGuidanceClick(self)
 		navigate()
 		return
 	else
+		navtarget = self.target
 		updateNavButtonText()
 		navigate()
 		return
