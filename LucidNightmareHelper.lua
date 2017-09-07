@@ -709,11 +709,11 @@ local function navigateToUnexplored()
 	
 	while (roomstacksize > 0) do
 
-		local cur = table.remove(roomstack)
+		local cur = table.remove(roomstack, 1)
 		roomstacksize = roomstacksize - 1
 		cur.visited = true
 		
-		local tempDirections = table.remove(directionsStack)
+		local tempDirections = table.remove(directionsStack, 1)
 		
 		for i=1,4 do
 			if (not cur.walls[i]) then
