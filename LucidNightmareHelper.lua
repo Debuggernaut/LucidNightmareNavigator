@@ -340,6 +340,10 @@ end
 local function deDuplicateMap(orig, dupe)
 	-- User has reached a second copy of the original room, spider out from this copy of the room and the original and erase duplicate rooms
 
+	if (orig == dupe) then
+		return
+	end
+
 	local roomQueue = {}
 	local rq1 = 1
 	local rq2 = 1
@@ -419,6 +423,10 @@ end
 local poi_warned = 0
 local function setPOIClick(self)
 	
+	if (poirooms[self.poi_index] == current_room) then
+		return
+	end
+	
 	--TODO: Warning popup before de-duplicating the map
 	
 	if (poirooms[self.poi_index] ~= nil and poi_warned ~= self.poi_index) then
@@ -427,9 +435,14 @@ local function setPOIClick(self)
 		return
 	end
 	
+	poi_warned = 0
+	
 	if (poirooms[self.poi_index] ~= nil) then
 		deDuplicateMap(poirooms[self.poi_index], current_room)
 	else
+		if (poirooms[current_room.poi_index] ~= nil) then
+			poirooms[current_room.poi_index] = nil
+		end
 		poirooms[self.poi_index] = current_room
 		current_room.poi_index = self.poi_index
 		
