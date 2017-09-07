@@ -354,13 +354,11 @@ local function deDuplicateMap(orig, dupe)
 	
 	resetVisitedKludge()
 	
-	print("rq1:"..rq1..", rq2:"..rq2)
 	-- PERFORMANCE WARNING!!! This Lua table is actually
 	-- some sort of bloated associative array, NOT a normal queue
 	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, orig)
 	dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, dupe)
 
-	print(" post push rq1:"..rq1..", rq2:"..rq2)
 	while (not luaSucksQueueEmpty(roomQueue, rq1, rq2)) do
 		local cur
 		local dcur
@@ -415,6 +413,7 @@ local function deDuplicateMap(orig, dupe)
 	print ("Done de-duplicating map!")
 	if (current_room == dupe) then
 		current_room = orig
+		setCurrentRoom(current_room)
 	end
 end
 
