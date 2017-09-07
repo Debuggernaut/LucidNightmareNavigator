@@ -40,6 +40,10 @@ local last_dir, last_room_number
 local wall_buttons = {}
 guidance_buttons = {}
 
+-- Quality Discount Function Pointers:
+local navigateKludge
+local resetVisitedKludge
+
 -- Help navigate to unexplored territory
 local navtarget = 11
 
@@ -179,8 +183,6 @@ local function updateWallButtonText()
 	end
 end
 
-local navigateKludge
-
 local function setCurrentRoom(r)
 	current_room = r
 	centerCam(r.x, r.y)
@@ -305,10 +307,115 @@ local default_theme = {
 				   f_button_color = "FFFFFFFF",
 				  }
 
-local function deDuplicate(orig, dupe)
-	-- User has reached a second copy of the original room, spider out from this copy of the room and the original and erase duplicate rooms
+			  
+local function luaSucksQueueInit(crappyLuaQueue, minIndex, maxIndex)
+	minIndex = 1
+	maxIndex = 0
 	
-	--TODO!!!
+	return minIndex, maxIndex
+end
+
+local function luaSucksQueuePush(crappyLuaQueue, minIndex, maxIndex, newVal)
+	crappyLuaQueue[maxIndex+1] = newVal
+	return minIndex, maxIndex+1
+end
+
+local function luaSucksQueuePop(crappyLuaQueue, minIndex, maxIndex)
+	if (minIndex > maxIndex) then
+		return minIndex, maxIndex, nil
+	end
+	
+	local newMin = minIndex + 1
+	return newMin, maxIndex, crappyLuaQueue[minIndex]
+end
+
+--Returns true if empty
+local function luaSucksQueueEmpty(crappyLuaQueue, minIndex, maxIndex)
+	if (minIndex > maxIndex) then
+		return true
+	end
+	
+	return false
+end
+
+local function deDuplicateMap(orig, dupe)
+	-- User has reached a second copy of the original room, spider out from this copy of the room and the original and erase duplicate rooms
+
+	local roomQueue = {}
+	local rq1 = 1
+	local rq2 = 1
+	
+	local dupeQueue = {}
+	local dq1 = 1
+	local dq2 = 1
+	
+	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
+	dq1, dq2 = luaSucksQueueInit(dupeQueue, dq1, dq2)
+	
+	resetVisitedKludge()
+	
+	print("rq1:"..rq1..", rq2:"..rq2)
+	-- PERFORMANCE WARNING!!! This Lua table is actually
+	-- some sort of bloated associative array, NOT a normal queue
+	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, orig)
+	dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, dupe)
+
+	print(" post push rq1:"..rq1..", rq2:"..rq2)
+	while (not luaSucksQueueEmpty(roomQueue, rq1, rq2)) do
+		local cur
+		local dcur
+		rq1, rq2, cur = luaSucksQueuePop(roomQueue, rq1, rq2)
+		dq1, dq2, dcur = luaSucksQueuePop(dupeQueue, dq1, dq2)
+
+		if (not cur.visited) then
+			cur.visited = true
+
+			for i=1,4 do				
+				local n = cur.neighbors[i]
+				local n2 = nil
+				if (dcur ~= nil) then
+					n2 = dcur.neighbors[i]
+				end
+				if (n == nil) then
+					if (n2 ~= nil) then
+					print ("Moving "..n2.index..", attaching to "..cur.index.." instead of "..dcur.index)
+						cur.neighbors[i] = n2
+						n2.neighbors[getOppositeDir(i)] = cur
+						
+						rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n2)
+						dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, nil)
+					end
+				else
+					--if (n2 ~= nil) then
+					--huh, I guess there's nothing special we need to do when
+					-- queueing up rooms for de-duplication?
+					--end
+					rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n)
+					dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, n2)
+				end
+			end
+			
+			if (dcur ~= nil) then
+				print ("Wiping out "..dcur.index..", dupe of "..cur.index)
+				-- Wipe out all references to the duplicate room, and recycle
+				-- its button:
+				if (dcur.poi_index ~= 0) then
+					cur.poi_index = dcur.poi_index
+					poirooms[cur.poi_index] = cur
+				end
+				wipe(dcur.neighbors)
+				wipe(dcur.walls)
+				rooms[dcur.index] = nil
+				dcur.button:Hide()
+				pool[#pool + 1] = dcur.button
+			end
+		end
+	end
+	
+	print ("Done de-duplicating map!")
+	if (current_room == dupe) then
+		current_room = orig
+	end
 end
 
 local poi_warned = 0
@@ -324,17 +431,16 @@ local function setPOIClick(self)
 		return
 	end
 	
-	--TODO: De-duplicate
 	if (poirooms[self.poi_index] ~= nil) then
-		print("Warning, didn't de-duplicate anything!  Map is now pretty much crap now")
-		poirooms[self.poi_index].poi_index = 0
+		deDuplicateMap(poirooms[self.poi_index], current_room)
+	else
+		poirooms[self.poi_index] = current_room
+		current_room.poi_index = self.poi_index
+		
+		current_room.POI_t = self.t
+		current_room.POI_c = self.c
+		recolorRoom(current_room)
 	end
-	poirooms[self.poi_index] = current_room
-	current_room.poi_index = self.poi_index
-	
-	current_room.POI_t = self.t
-	current_room.POI_c = self.c
-	recolorRoom(current_room)
 end
 
 local function updateNavButtonText()
@@ -660,6 +766,7 @@ end
 local function initialize()
 
 	navigateKludge = navigate
+	resetVisitedKludge = resetVisited
 	
 	if mf then 
 		mf:SetShown(not mf:IsShown())
