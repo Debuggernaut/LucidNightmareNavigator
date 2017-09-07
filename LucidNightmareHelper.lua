@@ -32,9 +32,11 @@ local purple = 5
 
 local pool = {}
 local map = {}
- rooms = {}
+local rooms = {}
 local current_room
-local mf, scrollframe, container, playerframe
+
+mf, scrollframe, container, playerframe = nil
+
 local last_dir, last_room_number
 
 local wall_buttons = {}
@@ -420,9 +422,7 @@ end
 local poi_warned = 0
 local function setPOIClick(self)
 	
-	--TODO: Warning popup before de-duplicating and possibly completely
-	-- hosing the map
-	--also todo: save/restore map automatically and manually
+	--TODO: Warning popup before de-duplicating the map
 	
 	if (poirooms[self.poi_index] ~= nil and poi_warned ~= self.poi_index) then
 		print ("WOAH WOAH WOAH, this point of interest was already defined as room "..poirooms[self.poi_index].index.."!  Click again to confirm a loop in the map and de-duplicate nodes")
@@ -808,6 +808,7 @@ local function initialize()
 		btn.poi_index = i
 		btn:SetScript("OnClick", setPOIClick)
 		btn:SetText(color_strings[i].." Rune")
+		btn:SetFrameLevel(5)
 
 		btn = ng:New(addonName, "Button", nil, mf)
 		btn:SetSize(90, 18)
@@ -817,6 +818,7 @@ local function initialize()
 		btn.poi_index = i+5
 		btn:SetScript("OnClick", setPOIClick)
 		btn:SetText(color_strings[i].." Orb")
+		btn:SetFrameLevel(5)
 
 		-- automatic waypoints maybe in future
 	end
@@ -827,6 +829,7 @@ local function initialize()
 		btn.dir = i
 		btn:SetScript("OnClick", setWallClick)
 		wall_buttons[i] = btn
+		btn:SetFrameLevel(5)
 	end
 	updateWallButtonText()
 	
@@ -844,6 +847,7 @@ local function initialize()
 	btn:SetSize(130,25)
 	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 )
 	btn:SetText("Navigation Target:")
+	btn:SetFrameLevel(5)
 	
 	for i=1,11 do
 		local btn = ng:New(addonName, "Button", nil, mf)
