@@ -35,12 +35,12 @@ local map = {}
 local rooms = {}
 local current_room
 
-mf, scrollframe, container, playerframe = nil
+local mf, scrollframe, container, playerframe = nil
 
 local last_dir, last_room_number
 
 local wall_buttons = {}
-guidance_buttons = {}
+local guidance_buttons = {}
 
 -- Quality Discount Function Pointers:
 local navigateKludge
@@ -50,8 +50,6 @@ local resetVisitedKludge
 local navtarget = 11
 
 local poirooms = {}
-
-raywashere = "Hello world!"
 
 --local doors = {{{-1378, 680},{-1300,710}}, -- north
 --               {{-1440, 600},{-1410,660}}, -- east
