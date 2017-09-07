@@ -1,3 +1,8 @@
+Author: Ray
+Date: Sep. 7th
+Description:
+Added turn-by-turn navigation, saving and loading, room deduplication
+
 lightweight tag a1c2d288984e0daadda3a2fb84e6a9a10908efa3 v0.1.1
 Author:	Saregon <n_rhygar@yahoo.it>
 Date:	Sun Sep 3 23:27:36 2017 +0200
