@@ -1,7 +1,6 @@
--- Lucid Nightmare Helper
--- by Vildiesel EU - Well of Eternity
--- modified by Wonderpants of Thrall to
---  track your location more intelligently
+-- Lucid Nightmare Navigator
+--       by Wonderpants of Thrall
+-- loosely based on LNH by Vildiesel EU - Well of Eternity
 
 local addonName, addon = ...
 local ng
@@ -997,7 +996,7 @@ local function initialize()
 	hide:SetScript("OnClick", function() mf:Hide() end)
 	hide:SetText(CLOSE)
 	
-	--LucidNightmareHelperTooltip:SetOwner(_G["UIParent"],"ANCHOR_NONE")
+	--LucidNightmareNavigatorTooltip:SetOwner(_G["UIParent"],"ANCHOR_NONE")
 	
 	print ("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
 	print ("-------------")
@@ -1007,7 +1006,7 @@ local function initialize()
 end
 
 -- slash command
-SLASH_LUCIDNIGHTMAREHELPER1 = "/lucid"
-SLASH_LUCIDNIGHTMAREHELPER2 = "/ln"
-SLASH_LUCIDNIGHTMAREHELPER3 = "/lnh"
-SlashCmdList["LUCIDNIGHTMAREHELPER"] = initialize
+SLASH_LucidNightmareNavigator1 = "/lucid"
+SLASH_LucidNightmareNavigator2 = "/ln"
+SLASH_LucidNightmareNavigator3 = "/lnn"
+SlashCmdList["LucidNightmareNavigator"] = initialize
