@@ -97,7 +97,7 @@ local function createButton(r)
 	local btn = getUnusedButton()
 	btn:SetPoint("TOPLEFT", container, "TOPLEFT", r.x, -r.y)
 	btn:SetBackdropColor(1, 1, 1, 1)
-	btn:SetBackdropBorderColor(0, 0, 0, 0) 
+	btn:SetBackdropBorderColor(0, 0, 0, 0)
 	btn:Show()
 	r.button = btn
 end
@@ -142,8 +142,8 @@ local function recolorRoom(r)
 	elseif r.POI_c == red then
 		func(r.button, 1, 0, 0, 1)
 	else -- clear
-		r.button:SetBackdropColor(1, 1, 1, 1) 
-		r.button:SetBackdropBorderColor(0, 0, 0, 0) 
+		r.button:SetBackdropColor(1, 1, 1, 1)
+		r.button:SetBackdropBorderColor(0, 0, 0, 0)
 	end
 end
 
@@ -188,7 +188,7 @@ local function setCurrentRoom(r)
 	playerframe:SetParent(r.button)
 	playerframe:SetAllPoints()
 	playerframe.tex:SetRotation(math.rad(getRotation(last_dir or north)))
-	
+
 	updateWallButtonText()
 end
 
@@ -305,11 +305,11 @@ local default_theme = {
 				   f_button_flags = "",
 				   f_button_color = "FFFFFFFF",
 				  }
-			  
+
 local function luaSucksQueueInit(crappyLuaQueue, minIndex, maxIndex)
 	minIndex = 1
 	maxIndex = 0
-	
+
 	return minIndex, maxIndex
 end
 
@@ -322,7 +322,7 @@ local function luaSucksQueuePop(crappyLuaQueue, minIndex, maxIndex)
 	if (minIndex > maxIndex) then
 		return minIndex, maxIndex, nil
 	end
-	
+
 	local newMin = minIndex + 1
 	return newMin, maxIndex, crappyLuaQueue[minIndex]
 end
@@ -332,7 +332,7 @@ local function luaSucksQueueEmpty(crappyLuaQueue, minIndex, maxIndex)
 	if (minIndex > maxIndex) then
 		return true
 	end
-	
+
 	return false
 end
 
@@ -346,16 +346,16 @@ local function deDuplicateMap(orig, dupe)
 	local roomQueue = {}
 	local rq1 = 1
 	local rq2 = 1
-	
+
 	local dupeQueue = {}
 	local dq1 = 1
 	local dq2 = 1
-	
+
 	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
 	dq1, dq2 = luaSucksQueueInit(dupeQueue, dq1, dq2)
-	
+
 	resetVisitedKludge()
-	
+
 	-- PERFORMANCE WARNING!!! This Lua table is actually
 	-- some sort of bloated associative array, NOT a normal queue
 	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, orig)
@@ -370,7 +370,7 @@ local function deDuplicateMap(orig, dupe)
 		if (not cur.visited) then
 			cur.visited = true
 
-			for i=1,4 do				
+			for i=1,4 do
 				local n = cur.neighbors[i]
 				local n2 = nil
 				if (dcur ~= nil) then
@@ -381,7 +381,7 @@ local function deDuplicateMap(orig, dupe)
 					print ("Moving "..n2.index..", attaching to "..cur.index.." instead of "..dcur.index)
 						cur.neighbors[i] = n2
 						n2.neighbors[getOppositeDir(i)] = cur
-						
+
 						rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n2)
 						dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, nil)
 					end
@@ -394,7 +394,7 @@ local function deDuplicateMap(orig, dupe)
 					dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, n2)
 				end
 			end
-			
+
 			if (dcur ~= nil) then
 				print ("Wiping out "..dcur.index..", dupe of "..cur.index)
 				-- Wipe out all references to the duplicate room, and recycle
@@ -411,7 +411,7 @@ local function deDuplicateMap(orig, dupe)
 			end
 		end
 	end
-	
+
 	print ("Done de-duplicating map!")
 	if (current_room == dupe) then
 		current_room = orig
@@ -421,30 +421,31 @@ end
 
 local poi_warned = 0
 local function setPOIClick(self)
-	
+
 	if (poirooms[self.poi_index] == current_room) then
 		return
 	end
-	
+
 	--TODO: Warning popup before de-duplicating the map
-	
+
 	if (poirooms[self.poi_index] ~= nil and poi_warned ~= self.poi_index) then
 		print ("WOAH WOAH WOAH, this point of interest was already defined as room "..poirooms[self.poi_index].index.."!  Click again to confirm a loop in the map and de-duplicate nodes")
 		poi_warned = self.poi_index
 		return
 	end
-	
+
 	poi_warned = 0
-	
+
 	if (poirooms[self.poi_index] ~= nil) then
 		deDuplicateMap(poirooms[self.poi_index], current_room)
 	else
 		if (poirooms[current_room.poi_index] ~= nil) then
 			poirooms[current_room.poi_index] = nil
 		end
+
 		poirooms[self.poi_index] = current_room
 		current_room.poi_index = self.poi_index
-		
+
 		current_room.POI_t = self.t
 		current_room.POI_c = self.c
 		recolorRoom(current_room)
@@ -454,9 +455,9 @@ end
 local function updateNavButtonText()
 	for i=1,11 do
 		local btn = guidance_buttons[i]
-		
+
 		local text = ""
-		
+
 		if (i == 11) then
 			text = "Unexplored Territory"
 		elseif (i > 0 and i < 6) then
@@ -464,11 +465,11 @@ local function updateNavButtonText()
 		elseif (i > 5 and i < 11) then
 			text = color_strings[i-5].." Orb"
 		end
-		
+
 		if (i == navtarget) then
 			text = "["..text.."]"
 		end
-		
+
 		btn:SetText(text)
 	end
 end
@@ -478,16 +479,16 @@ eb = {}
 function importMap()
 
 	print("WARNING!  You must load the map from the same room as you were when you saved the map")
-		
+
 	EraseRooms()
-	
+
 	local t = eb:GetText()
 	print("Loading this map:")
 	print(t)
 
 	raywashere = t
 	local l = string.len(t)
-	
+
 	print("Length:",l)
 	local i = 1
 	while (i <= l) do
@@ -500,28 +501,28 @@ function importMap()
 		local line = string.sub(t,i,l2-1)
 		i = l2
 		--print (line)
-		
+
 		local substrings = {}
 		local j=1
 		local linelength = string.len(line)
-		while (j <= linelength) do 
+		while (j <= linelength) do
 			local t1,t2 = string.find(line,",",j,true)
 			if (t1 == nil) then
 				t2 = l+1
 			end
 			local token = string.sub(line,j,t2-1)
 			j = t2
-						
+
 			substrings[#substrings+1] = token
-			
+
 			j = j+1
 		end
-		
+
 		last_room_number = #rooms
-		
+
 		local room = {}
 		room.index = tonumber(substrings[1])
-		if (room.index ~= nil) then 
+		if (room.index ~= nil) then
 			room.poi_index = tonumber(substrings[2])
 			room.neighbor_indices = {}
 			for neighbor=1,4 do
@@ -533,12 +534,12 @@ function importMap()
 			end
 			room.visited=false
 			room.neighbors={}
-			
+
 			rooms[room.index] = room
-			
+
 			room.x = tonumber(substrings[11])
 			room.y = tonumber(substrings[12])
-			
+
 			if (substrings[13]=="current") then
 				print ("Current room is ",room.index)
 				current_room = room
@@ -546,17 +547,17 @@ function importMap()
 		else
 			print("Ignoring line '"..line.."'")
 		end
-		
+
 		i = i + 1
-		
+
 	end
-	
-	
+
+
 	for k,v in pairs(rooms) do
 		for neighbor=1,4 do
 			local nIndex = v.neighbor_indices[neighbor]
-			
-			if (v.neighbor_indices[neighbor] ~= nil) then 
+
+			if (v.neighbor_indices[neighbor] ~= nil) then
 				if (rooms[nIndex] == nil) then
 					print("Error, room ", v.index, " indicates it's neighbors with room ",nIndex,",which was not found")
 				else
@@ -564,7 +565,7 @@ function importMap()
 				end
 			end
 		end
-		
+
 		if (v.poi_index > 5) then
 			v.POI_c = v.poi_index - 5
 			v.POI_t = "orb"
@@ -578,26 +579,26 @@ function importMap()
 		createButton(v)
 		recolorRoom(v)
 		setRoomNumber(v)
-		
+
 		if (v == current_room) then
 			setCurrentRoom(v)
 		end
 	end
-	
-	
+
+
 end
 
 function dumpMap()
 
 	local serialized = "index,poi,north_neighbor,east_neighbor,south_neighbor,west_neighbor,n_wall,e_wall,s_wall,w_wall,x,y,current,-\n"
-	
+
 	local dirLetters = {"N","E","S","W"}
 	for k,v in pairs(rooms) do
 		serialized=serialized..v.index..","..v.poi_index
-		
+
 		local neighborString = ""
 		local wallString = ""
-		
+
 		local serializedNeighbors = ""
 		local serializedWalls = ""
 		for i=1,4 do
@@ -616,10 +617,10 @@ function dumpMap()
 				neighborString = neighborString..dirLetters[i]..":"..v.neighbors[i].index..","
 			end
 		end
-		
+
 		serialized=serialized..serializedNeighbors..serializedWalls
 		serialized=serialized..","..v.x..","..v.y..","
-		
+
 		local curString = ""
 		if (current_room == v) then
 			serialized=serialized.."current,"
@@ -627,10 +628,10 @@ function dumpMap()
 		else
 			serialized=serialized..","
 		end
-		
+
 		serialized=serialized.."-\n"
-		
-		
+
+
 		print("Room "..(k)..curString.." POI: ",v.poi_index," N:[",neighborString,"] W:[",wallString,"]")
 	end
 	eb:SetText(serialized)
@@ -644,9 +645,9 @@ end
 
 local function outputGuidance(directions)
 	local steps = (table.getn(directions)-1)
-	
+
 	local navString = ""
-	
+
 	if (navtarget == 11) then
 		if (steps ~= 1) then
 			print ("Hello, user!  I have detected an unexplored room ",steps," steps from here!")
@@ -656,7 +657,7 @@ local function outputGuidance(directions)
 	else
 		if (steps ~= 1) then
 			local destStr = ""
-			
+
 			if (navtarget > 5) then
 				destStr = color_strings[navtarget - 5]
 				destStr = destStr.." Orb"
@@ -664,11 +665,11 @@ local function outputGuidance(directions)
 				destStr = color_strings[navtarget]
 				destStr = destStr.." Rune"
 			end
-			
+
 			print ("Hello, user!  I have detected your destination ("..destStr..") ",steps," steps from here!")
 		end
 	end
-	
+
 	--directions[1] is always "0" due to a lazy design decision
 	for i=2,4 do
 		if (directions[i] == nil) then
@@ -676,59 +677,59 @@ local function outputGuidance(directions)
 			break
 		end
 		navString = navString.."Go "..direction_strings[directions[i]]..", then "
-		
-		if (i == 4) then 
+
+		if (i == 4) then
 			navString = navString.."..."
 		end
 	end
-	
+
 	print(navString)
 end
 
 local function navigateToUnexplored()
-	
+
 	-- perform a depth-first traversal until you encounter an unexplored room
 	-- and then print out directions to it for the user
 	local roomstack = {}
 	local roomstacksize = 0
 	local directionsStack = {}
-	
+
 	resetVisited()
-	
+
 	-- PERFORMANCE WARNING!!! This Lua table is actually
 	-- some sort of bloated associative array, NOT a normal stack
 	table.insert(roomstack, current_room)
 	roomstacksize = roomstacksize + 1
-	
+
 	-- Directions: 0 is the starting point,
 	-- after that it's an array of directions taken to get
 	-- to the current room
 	local tempDirections = {0}
 	table.insert(directionsStack, tempDirections)
-	
+
 	while (roomstacksize > 0) do
 
 		local cur = table.remove(roomstack, 1)
 		roomstacksize = roomstacksize - 1
 		cur.visited = true
-		
+
 		local tempDirections = table.remove(directionsStack, 1)
-		
+
 		for i=1,4 do
 			if (not cur.walls[i]) then
-			
+
 				local newDirections = {}
 				for k,v in pairs(tempDirections) do
 					newDirections[k] = v
 				end
 				newDirections[#newDirections+1] = i
-				
+
 				local n = cur.neighbors[i]
 				if (n == nil) then
 					outputGuidance(newDirections)
 					return
 				else
-					if (not n.visited) then							
+					if (not n.visited) then
 						table.insert(roomstack, n)
 						roomstacksize = roomstacksize + 1
 						table.insert(directionsStack, newDirections)
@@ -737,7 +738,7 @@ local function navigateToUnexplored()
 			end
 		end
 	end
-	
+
 	print ("Hmm, that's odd, according to this you have no unexplored territory.. maybe try navigating to some other point of interest and check the wall settings on your way ")
 end
 
@@ -747,35 +748,35 @@ local function navigateToTarget(targetRoom, startingRoom)
 	if (targetRoom == nil or startingRoom == nil) then
 		return
 	end
-	
+
 	-- NOTE: It would be much faster in this case to simultaneously
 	-- spider out from both targetRoom and startingRoom at the same
 	-- time, then return the directions for where they meet
 	-- I don't feel like bothering to chew through all that coding,
 	-- though, so I'm going to take the extra half-assed approach
-	-- and just do a normal breadth-first traversal starting at 
+	-- and just do a normal breadth-first traversal starting at
 	-- startingRoom, without even bothering to cache the results or
 	-- anything (: D
 
 	local directionsQueue = {}
-	
+
 	resetVisited()
-		
+
 	local roomQueue = {}
 	local rq1 = 1
 	local rq2 = 1
-	
+
 	local targetQueue = {}
 	local dq1 = 1
 	local dq2 = 1
-	
+
 	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
 	dq1, dq2 = luaSucksQueueInit(directionsQueue, dq1, dq2)
-	
+
 	resetVisitedKludge()
-	
+
 	local tempDirections = {0}
-	
+
 	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, startingRoom)
 	dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, tempDirections)
 
@@ -787,9 +788,9 @@ local function navigateToTarget(targetRoom, startingRoom)
 		if (not cur.visited) then
 			cur.visited = true
 
-			for i=1,4 do		
+			for i=1,4 do
 				local newDirections = {}
-				
+
 				local n = cur.neighbors[i]
 				local n2 = nil
 				if (n ~= nil) then
@@ -815,7 +816,7 @@ end
 local function navigate()
 	-- Navigates to the nearest unexplored territory, or
 	-- a particular point of interest, based on global "navtarget"
-	
+
 	if (navtarget ~= 11) then
 		navigateToTarget(poirooms[navtarget], current_room)
 	else
@@ -831,7 +832,7 @@ local function setGuidanceClick(self)
 		navigate()
 		return
 	end
-	
+
 	if (poirooms[self.target] == nil) then
 		print("That target has not been discovered yet.  Navigating to the nearest unexplored territory")
 		navtarget = 11
@@ -851,13 +852,13 @@ local function setWallClick(self)
 	recolorRoom(current_room)
 	updateWallButtonText()
 end
-   
+
 local function initialize()
 
 	navigateKludge = navigate
 	resetVisitedKludge = resetVisited
-	
-	if mf then 
+
+	if mf then
 		mf:SetShown(not mf:IsShown())
 		return
 	end
@@ -923,7 +924,7 @@ local function initialize()
 		btn.highlight:SetBlendMode("DISABLE")
 	end
 	updateWallButtonText()
-	
+
 	wall_buttons[1]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -20)
 	wall_buttons[1]:SetSize(100, 18)
 	wall_buttons[2]:SetPoint("TOPLEFT", mf, "TOPLEFT", 350, -40)
@@ -932,28 +933,28 @@ local function initialize()
 	wall_buttons[4]:SetSize(100, 18)
 	wall_buttons[3]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -60)
 	wall_buttons[3]:SetSize(100, 18)
-	
+
 	--TODO: Figure out how to make a normal text label instead of a button
 	local btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetSize(130,25)
 	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 )
 	btn:SetText("Navigation Target:")
 	btn:SetFrameLevel(5)
-	
+
 	for i=1,11 do
 		local btn = ng:New(addonName, "Button", nil, mf)
 		btn.target = i
 		btn:SetScript("OnClick", setGuidanceClick)
 		guidance_buttons[i] = btn
-		
+
 		btn:SetSize(90, 18)
 		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 550, -20 * i - 30)
-		
+
 		if (i == 11) then
 			btn:SetSize(130,25)
 			btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 * i - 30)
 		end
-		
+
 		guidance_buttons[i] = btn
 	end
 	updateNavButtonText()
@@ -972,13 +973,13 @@ local function initialize()
 	eb:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 20, 20)
 	eb:SetSize(110, 18)
 	eb:SetText("CTRL+A, CTRL+C")
-	
+
 	btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 140, 30)
 	btn:SetSize(130, 18)
 	btn:SetScript("OnClick", dumpMap)
 	btn:SetText("Export Map to Box")
-	
+
 	btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 140, 10)
 	btn:SetSize(130, 18)
@@ -995,9 +996,9 @@ local function initialize()
 	hide:SetPoint("BOTTOM", mf, "BOTTOM", 50, 10)
 	hide:SetScript("OnClick", function() mf:Hide() end)
 	hide:SetText(CLOSE)
-	
+
 	--LucidNightmareNavigatorTooltip:SetOwner(_G["UIParent"],"ANCHOR_NONE")
-	
+
 	print ("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
 	print ("-------------")
 	print ("Don't bother checking the map too carefully, because the maze is three-dimensional and it doesn't appear that every room is actually perfectly square (or the connections between them are different lengths in actual space, anyway).  This means that if you try to carefully graph everything out, you'll end up with strange overlaps, loops, and places where things don't meet up.")
