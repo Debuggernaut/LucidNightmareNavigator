@@ -422,6 +422,16 @@ end
 local poi_warned = 0
 local function setPOIClick(self)
 
+	if (self.poi_index == nil) then
+		-- Clear room
+		if (poirooms[current_room.poi_index] ~= nil) then
+			poirooms[current_room.poi_index] = nil
+		end
+		current_room.POI_t = self.t
+		current_room.POI_c = self.c
+		recolorRoom(current_room)
+	end
+
 	if (poirooms[self.poi_index] == current_room) then
 		return
 	end
@@ -962,13 +972,12 @@ local function initialize()
 	local btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 55, -20 * 6)
 	btn:SetSize(90, 18)
-	--btn.t = "rune"
-	btn.c = 6
+	btn.t = nil
+	btn.c = nil
+	btn.poi_index = nil
 	btn:SetScript("OnClick", setPOIClick)
 	btn:SetText("Clear Color")
-	
-	btn:Disable()
-	
+
 	eb = ng:New(addonName, "Editbox", nil, mf)
 	eb:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 20, 20)
 	eb:SetSize(110, 18)
