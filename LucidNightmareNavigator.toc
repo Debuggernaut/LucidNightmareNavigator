@@ -1,4 +1,4 @@
-## Interface: 70300
+## Interface: 80200
 ## Title: Lucid Nightmare Navigator
 ## Author: Wonderpants US - Thrall
 ## Notes: Directs you through the Endless Halls maze

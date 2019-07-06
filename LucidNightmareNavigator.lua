@@ -186,6 +186,7 @@ local function setCurrentRoom(r)
 	current_room = r
 	centerCam(r.x, r.y)
 	playerframe:SetParent(r.button)
+	playerframe:ClearAllPoints()
 	playerframe:SetAllPoints()
 	playerframe.tex:SetRotation(math.rad(getRotation(last_dir or north)))
 
