@@ -19,7 +19,7 @@ ng:RegisterType("SliderH")
 ng:RegisterType("SliderV")
 
 function ng.constructors.Slider(addon, name, parent, theme)
- local f = CreateFrame("Slider", name, parent)
+ local f = CreateFrame("Slider", name, parent, BackdropTemplateMixin and "BackdropTemplate")
  f:SetValueStep(1)
  f.SetText = ng.set_text_function
  f.backdrop_type = "l2"

@@ -23,7 +23,7 @@ ng:RegisterType("Label")
 
 -- Frame
 function ng.constructors.Frame(addon, name, parent, theme)
- local f = CreateFrame("Frame", name, parent)
+ local f = CreateFrame("Frame", name, parent, BackdropTemplateMixin and "BackdropTemplate");
  f.backdrop_type = "l0"
  return f
 end
@@ -35,7 +35,7 @@ end
 
 -- Groupbox
 function ng.constructors.Groupbox(addon, name, parent, theme)
- local f = CreateFrame("Frame", name, parent)
+ local f = CreateFrame("Frame", name, parent, BackdropTemplateMixin and "BackdropTemplate");
  f.backdrop_type = "l1"
  f.text = ng.constructors.Label(addon, nil, f, theme)
  f.text:SetPoint("TOPLEFT", f, "TOPLEFT", 2, 12)

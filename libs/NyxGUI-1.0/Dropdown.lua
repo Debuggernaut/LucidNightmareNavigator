@@ -108,7 +108,7 @@ local function dropdown_init(self)
 end
 
 function ng.constructors.Dropdown(addon, name, parent, theme)
- local f = CreateFrame("Button", name, parent)
+ local f = CreateFrame("Button", name, parent, BackdropTemplateMixin and "BackdropTemplate")
  
  if not dropdowns then dropdowns = {} end
  

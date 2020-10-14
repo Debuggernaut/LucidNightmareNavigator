@@ -119,7 +119,7 @@ function ng.constructors.Listbox(addon, name, parent, theme)
 
  assert(name, "NyxGUI: New(Listbox) the name parameter cannot be nil.")
 
- local lb = CreateFrame("Scrollframe", name, parent, "HybridScrollFrameTemplate")
+ local lb = CreateFrame("Scrollframe", name, parent, "HybridScrollFrameTemplate,BackdropTemplate")
 
  lb.backdrop_type = "l1"
  lb.addon = addon
@@ -131,7 +131,7 @@ function ng.constructors.Listbox(addon, name, parent, theme)
  sb:SetPoint("BOTTOMLEFT", lb, "BOTTOMRIGHT", 4, 15)
  
  -- ScrollUp button
- local f = CreateFrame("Button", name.."ScrollUp", sb)
+ local f = CreateFrame("Button", name.."ScrollUp", sb, BackdropTemplateMixin and "BackdropTemplate")
  f:SetPoint("BOTTOMLEFT", sb, "TOPLEFT", 1, 1)
  f:SetPoint("BOTTOMRIGHT", sb, "TOPRIGHT", 1, 1)
  f:SetHeight(15)
@@ -141,7 +141,7 @@ function ng.constructors.Listbox(addon, name, parent, theme)
  lb.scrollUp = f
 
  -- ScrollDown button
- f = CreateFrame("Button", name.."ScrollDown", sb)
+ f = CreateFrame("Button", name.."ScrollDown", sb, BackdropTemplateMixin and "BackdropTemplate")
  f:SetPoint("TOPLEFT", sb, "BOTTOMLEFT", 1, -2)
  f:SetPoint("TOPRIGHT", sb, "BOTTOMRIGHT", 1, -2)
  f:SetHeight(15)

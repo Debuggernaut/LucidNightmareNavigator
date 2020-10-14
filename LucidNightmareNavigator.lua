@@ -882,7 +882,7 @@ local function initialize()
 	mf:SetPoint("CENTER")
 	mf:SetSize(700, 500)
 
-	scrollframe = CreateFrame("ScrollFrame", nil, mf)
+	scrollframe = CreateFrame("ScrollFrame", nil, mf, BackdropTemplateMixin and "BackdropTemplate")
 	scrollframe:SetAllPoints()
 
 	container = CreateFrame("Frame", nil, scrollframe)

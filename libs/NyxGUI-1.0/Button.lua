@@ -53,7 +53,7 @@ end
 
 -- Button
 function ng.constructors.Button(addon, name, parent, theme)
- local f = CreateFrame("Button", name, parent)
+ local f = CreateFrame("Button", name, parent, BackdropTemplateMixin and "BackdropTemplate")
  f:SetSize(75, 25)
  
  f.highlight = f:CreateTexture()
@@ -90,7 +90,7 @@ local function colorButton_update(self, ...)
 end
 
 function ng.constructors.Colorbutton(addon, name, parent, theme)
- local f = CreateFrame("Frame", name, parent)
+ local f = CreateFrame("Frame", name, parent, BackdropTemplateMixin and "BackdropTemplate")
  f:SetSize(18, 18)
  f:SetBackdrop(cb_backdrop)
  f:SetBackdropColor(0, 0, 0, 1)
@@ -161,7 +161,7 @@ function ng.constructors.Tabbutton(addon, name, parent, theme, fixedIndex)
  if fixedIndex and parent.tabs[fixedIndex] then
   tab = parent.tabs[fixedIndex]
  else
-  tab = CreateFrame("Frame", nil, parent)
+  tab = CreateFrame("Frame", nil, parent, BackdropTemplateMixin and "BackdropTemplate")
   tab:SetAllPoints()
   tinsert(parent.tabs, tab)
  end
@@ -254,7 +254,7 @@ end
 
 -- Checkbox
 function ng.constructors.Checkbox(addon, name, parent, theme)
- local f = CreateFrame("Checkbutton", name, parent, "OptionsCheckButtonTemplate")
+ local f = CreateFrame("Checkbutton", name, parent, "OptionsCheckButtonTemplate,BackdropTemplate")
 
  tex = f:GetCheckedTexture()
  tex:ClearAllPoints()

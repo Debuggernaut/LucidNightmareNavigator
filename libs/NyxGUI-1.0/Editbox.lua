@@ -17,7 +17,7 @@ local ng = NyxGUI(NyxGUImajor)
 ng:RegisterType("Editbox", "Editbox")
 
 function ng.constructors.Editbox(addon, name, parent, theme)
- local f = CreateFrame("Editbox", name, parent)
+ local f = CreateFrame("Editbox", name, parent, BackdropTemplateMixin and "BackdropTemplate")
  f:SetSize(150, 15)
  f:SetTextInsets(5, 0, 0, 0)
  f:SetAutoFocus(false)
