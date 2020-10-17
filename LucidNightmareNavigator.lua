@@ -83,18 +83,35 @@ local function getUnusedButton()
 	if #pool > 0 then
 		return tremove(pool, 1)
 	else
-		local btn = ng:New(addonName, "Frame", nil, container)
+		local btn = ng:New(addonName, "Frame", "room" .. tostring(#rooms), container)
 		btn:SetSize(buttonW, buttonH)
 		btn.text = btn:CreateFontString()
 		btn.text:SetFont("Fonts\\FRIZQT__.TTF", 8)
 		btn.text:SetAllPoints()
-		btn.text:SetText("")
+        btn.text:SetText("")
+
+        btn.links = {}
+        dir = 1
+
+        for dir=1,4 do
+            btn.links[dir] = ng:New(addonName, "Frame", "room" .. tostring(#rooms) .. "w" .. tostring(dir), btn)
+            btn.links[dir]:SetBackdropColor(0.7, 0.7, 0.7, 1)
+            btn.links[dir]:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
+            btn.links[dir]:SetSize(3, 3)
+            btn.links[dir]:Show()
+        end
+
+        btn.links[north]:SetPoint("TOP", btn, "TOP", 0, 3)
+        btn.links[south]:SetPoint("BOTTOM", btn, "BOTTOM", 0, -3)
+        btn.links[east]:SetPoint("RIGHT", btn, "RIGHT", 3, 0)
+        btn.links[west]:SetPoint("LEFT", btn, "LEFT", -3, 0)
+
 		return btn
 	end
 end
 
 local function createButton(r)
-	local btn = getUnusedButton()
+    local btn = getUnusedButton()
 	btn:SetPoint("TOPLEFT", container, "TOPLEFT", r.x, -r.y)
 	btn:SetBackdropColor(1, 1, 1, 1)
 	btn:SetBackdropBorderColor(0, 0, 0, 0)
@@ -144,7 +161,15 @@ local function recolorRoom(r)
 	else -- clear
 		r.button:SetBackdropColor(1, 1, 1, 1)
 		r.button:SetBackdropBorderColor(0, 0, 0, 0)
-	end
+    end
+
+    for dir=1,4 do
+        if r.walls[dir] then
+            r.button.links[dir]:Hide()
+        else
+            r.button.links[dir]:Show()
+        end
+    end
 end
 
 local function newRoom()
