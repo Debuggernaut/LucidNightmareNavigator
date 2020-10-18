@@ -22,6 +22,10 @@ local west = 4
 
 local direction_strings = {"North","East","South","West"}
 local color_strings = {"Yellow","Blue","Red","Green","Purple"}
+local EHHPOIStrings = {
+    "#Y","#B","#R","#G","#P",
+    "$Y","$B","$R","$G","$P"
+}
 
 local yellow = 1
 local blue = 2
@@ -77,6 +81,13 @@ end
 local function centerCam(x, y)
 	scrollframe:SetHorizontalScroll(x - 250 + buttonW / 2)
 	scrollframe:SetVerticalScroll(y - 250 + buttonH / 2)
+end
+
+
+local function resetVisited()
+	for k,v in pairs(rooms) do
+		v.visited = false
+	end
 end
 
 local function getUnusedButton()
@@ -199,16 +210,30 @@ end
 
 local function updateWallButtonText()
 	for i=1,4 do
-		if (current_room == nil or not current_room.walls[i]) then
+		if (current_room == nil) then
 			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
-		else
-			wall_buttons[i]:SetText("Wall to the "..direction_strings[i])
+		elseif (current_room.walls[i]) then
+            wall_buttons[i]:SetText("Wall to the "..direction_strings[i])
+        else
+			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
 		end
 	end
 end
 
 local function setCurrentRoom(r)
-	current_room = r
+    current_room = r
+    if (r == nil) then
+        print("setCurrentRoom: Current room is nil!")
+        return
+    end
+    if (r.x == nil) then
+        print("setCurrentRoom: Current r.x is nil!",r.index)
+        r.x = 0
+    end
+    if (r.y == nil) then
+        print("setCurrentRoom: Current r.y is nil!",r.index)
+        r.y = 0
+    end
 	centerCam(r.x, r.y)
 	playerframe:SetParent(r.button)
 	playerframe:ClearAllPoints()
@@ -218,12 +243,9 @@ local function setCurrentRoom(r)
 	updateWallButtonText()
 end
 
-local function addRoom(dir)
-
-	local r = newRoom()
-	current_room.neighbors[dir] = r
-
-	r.neighbors[getOppositeDir(dir)] = current_room
+local function setRoomXY(lastRoom, direction, newRoom)
+    local dir = direction
+    local r = newRoom
 
 	local dx, dy = 0, 0
 
@@ -243,7 +265,7 @@ local function addRoom(dir)
 
 		-- Keep from drawing rooms on top of each other on the map
 		for k,v in pairs(rooms) do
-			if v.x == current_room.x + offsetX and v.y == current_room.y + offsetY then
+			if v.x == lastRoom.x + offsetX and v.y == lastRoom.y + offsetY then
 				offsetX = offsetX + dx
 				offsetY = offsetY + dy
 				found = true
@@ -255,8 +277,18 @@ local function addRoom(dir)
 		end
 	end
 
-	r.x = current_room.x + offsetX
-	r.y = current_room.y + offsetY
+	r.x = lastRoom.x + offsetX
+	r.y = lastRoom.y + offsetY
+end
+
+local function addRoom(dir)
+
+	local r = newRoom()
+	current_room.neighbors[dir] = r
+
+	r.neighbors[getOppositeDir(dir)] = current_room
+
+    setRoomXY(current_room, dir, r)
 
 	createButton(r)
 
@@ -394,17 +426,25 @@ local function deDuplicateMap(orig, dupe)
 		dq1, dq2, dcur = luaSucksQueuePop(dupeQueue, dq1, dq2)
 
 		if (not cur.visited) then
-			cur.visited = true
+            cur.visited = true
+
+            for i=1,4 do
+                if (dcur ~= nil and cur ~= nil) then
+                    if (cur.walls[i] ~= dcur.walls[i]) then
+                        --print("AH CRAP, room " .. cur.index .. " might be a trap, since it doesn't match " .. dcur.index);
+                    end
+                end
+            end
 
 			for i=1,4 do
 				local n = cur.neighbors[i]
 				local n2 = nil
 				if (dcur ~= nil) then
 					n2 = dcur.neighbors[i]
-				end
+                end
 				if (n == nil) then
 					if (n2 ~= nil) then
-					print ("Moving "..n2.index..", attaching to "..cur.index.." instead of "..dcur.index)
+					    --print ("Moving "..n2.index..", attaching to "..cur.index.." instead of "..dcur.index)
 						cur.neighbors[i] = n2
 						n2.neighbors[getOppositeDir(i)] = cur
 
@@ -412,33 +452,32 @@ local function deDuplicateMap(orig, dupe)
 						dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, nil)
 					end
 				else
-					--if (n2 ~= nil) then
-					--huh, I guess there's nothing special we need to do when
-					-- queueing up rooms for de-duplication?
-					--end
 					rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n)
 					dq1, dq2 = luaSucksQueuePush(dupeQueue, dq1, dq2, n2)
 				end
 			end
 
-			if (dcur ~= nil) then
-				print ("Wiping out "..dcur.index..", dupe of "..cur.index)
+            if (dcur ~= nil) then
+                dcur.dupedTo = cur
 				-- Wipe out all references to the duplicate room, and recycle
 				-- its button:
 				if (dcur.poi_index ~= 0) then
 					cur.poi_index = dcur.poi_index
-					poirooms[cur.poi_index] = cur
+                    poirooms[cur.poi_index] = cur
+                    print("poi index",cur.poi_index," was ",dcur.index," now ", cur.index)
 				end
 				wipe(dcur.neighbors)
 				wipe(dcur.walls)
-				rooms[dcur.index] = nil
-				dcur.button:Hide()
-				pool[#pool + 1] = dcur.button
+                rooms[dcur.index] = nil
+                if (dcur.button ~= nil) then
+                    dcur.button:Hide()
+			    	pool[#pool + 1] = dcur.button
+                end 
 			end
 		end
 	end
 
-	print ("Done de-duplicating map!")
+	--print ("Done de-duplicating map!")
 	if (current_room == dupe) then
 		current_room = orig
 		setCurrentRoom(current_room)
@@ -512,17 +551,212 @@ end
 
 eb = {}
 
+local EHHPOINums = {}
+for i=1,#EHHPOIStrings do
+    EHHPOINums[EHHPOIStrings[i]] = i
+end
+
+function ehhPOINum(ehhPOIStr)
+    local poiNum = EHHPOINums[ehhPOIStr]
+
+    if (poiNum == nil) then
+        print("Error parsing input, could not understand "..ehhPOIStr)
+    end
+
+    return poiNum
+end
+
+-- Woe upon any who dares to try and run this cursed code
+-- function importFromEHH(t)
+-- 	print("Loading this map:")
+--     print(t)
+
+--     map[1] = newRoom()
+--     for x=1,#rooms do
+--         if map[1] == rooms[x] then
+--             print ("Found 'im, ", x)
+--         end
+--         if map[1].index == rooms[x].index then
+--             print ("Found 'im!, ", x)
+--         end
+--     end
+
+-- 	map[1].x = containerW / 2
+-- 	map[1].y = containerH / 2
+
+-- 	last_room_number = 0
+-- 	-- createButton(map[1])
+-- 	-- setRoomNumber(map[1])
+
+--     -- setCurrentRoom(map[1])
+--     -- recolorRoom(map[1])
+
+--     local poiStr = string.sub(t,1,2)
+--     local poiNum = ehhPOINum(poiStr)
+--     map[1].poi_index = poiNum
+--     poirooms[map[1].poi_index] = map[1]
+
+--     local toBeDeduplicatedOrigs = {}
+--     local toBeDeduplicatedDupes = {}
+--     local cur = map[1]
+--     for i=3,string.len(t) do
+--         local c = string.sub(t,i, i)
+--         if (c == "\n") then
+--             cur = nil
+--         elseif (c == "$" or c == "#") then
+--             poiStr = string.sub(t,i,i+1)
+--             poiNum = ehhPOINum(poiStr)
+--             if (cur == nil) then
+--                 if (poirooms[poiNum] == nil) then
+--                     -- Create a new room, set it as this POI, will attach to the
+--                     -- rest of the map later
+--                     cur = newRoom()
+--                     poirooms[poiNum]  = cur
+--                     cur.poi_index = poiNum
+--                 else
+--                     cur = poirooms[poiNum]
+--                 end
+--             else
+--                 if (poirooms[poiNum] == nil) then
+--                     poirooms[poiNum]  = cur
+--                     cur.poi_index = poiNum
+--                 else
+--                     local dupe = cur
+--                     local orig = poirooms[poiNum]
+--                     toBeDeduplicatedOrigs[#toBeDeduplicatedOrigs+1] = orig
+--                     toBeDeduplicatedDupes[#toBeDeduplicatedDupes+1] = dupe
+--                 end
+--             end
+--         elseif (c == "N") then
+--             dir = 1
+--             local r = newRoom()
+--             cur.neighbors[dir] = r
+--             r.neighbors[getOppositeDir(dir)] = cur
+--             cur = r
+--         elseif (c == "E") then
+--             dir = 2
+--             local r = newRoom()
+--             cur.neighbors[dir] = r
+--             r.neighbors[getOppositeDir(dir)] = cur
+--             cur = r
+--         elseif (c == "S") then
+--             dir = 3
+--             local r = newRoom()
+--             cur.neighbors[dir] = r
+--             r.neighbors[getOppositeDir(dir)] = cur
+--             cur = r
+--         elseif (c == "W") then
+--             dir = 4
+--             local r = newRoom()
+--             cur.neighbors[dir] = r
+--             r.neighbors[getOppositeDir(dir)] = cur
+--             cur = r
+--         end
+--     end
+
+--     for x=1,#rooms do
+--         if map[1] == rooms[x] then
+--             print ("2 Found 'im, ", x)
+--         end
+--         if map[1].index == rooms[x].index then
+--             print ("2 Found 'im!, ", x)
+--         end
+--     end
+--     for i=1,#toBeDeduplicatedOrigs do
+--         local orig = toBeDeduplicatedOrigs[i]
+--         local orig_loop = orig
+--         local dupe = toBeDeduplicatedDupes[i]
+--         local dupe_loop = dupe
+
+--         while(orig.dupedTo ~= nil) do
+--             orig = orig.dupedTo
+--             if (orig == orig_loop) then
+--                 print("Found a loop")
+--                 break
+--             end
+--         end
+--         while(dupe.dupedTo ~= nil) do
+--             dupe = dupe.dupedTo
+--             if (dupe == dupe_loop) then
+--                 print("Found a loop")
+--                 break
+--             end
+--         end
+
+--         if (orig.dupedTo ~= nil and dupe.dupedTo ~= nil) then
+--             deDuplicateMap(orig, dupe)
+--         end
+--         --dupe.dupedTo = orig
+--     end
+
+--     while(map[1].dupedTo ~= nil) do
+--         print("map[1] was duped..")
+--         map[1] = map[1].dupedTo
+--     end
+
+--     print("Built room graph, now creating a UI map..")
+--     resetVisited()
+--     for x=1,#rooms do
+--         if map[1] == rooms[x] then
+--             print ("3 Found 'im, ", x)
+--         end
+--         if map[1].index == rooms[x].index then
+--             print ("3 Found 'im!, ", x)
+--         end
+--     end
+
+--     -- Spider out over the map and give all the rooms UI buttons
+-- 	local roomQueue = {}
+-- 	local rq1 = 1
+--     local rq2 = 1
+-- 	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
+-- 	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, map[1])
+
+--     while (not luaSucksQueueEmpty(roomQueue, rq1, rq2)) do
+-- 		rq1, rq2, cur = luaSucksQueuePop(roomQueue, rq1, rq2)
+--         --print(rq1,rq2,cur.index,cur.visited,cur.neighbors[1] == nil,cur.neighbors[2] == nil,cur.neighbors[3] == nil,cur.neighbors[4] == nil)
+
+-- 		if (cur ~= nil) then
+--             cur.visited = true
+--             createButton(cur)
+--             setRoomNumber(cur)
+--             recolorRoom(cur)
+
+-- 			for i=1,4 do
+-- 				local n = cur.neighbors[i]
+-- 				if (n ~= nil) then
+--                     if (n.visited == false) then
+--                         setRoomXY(cur, i, n)
+--                         rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n)
+--                     end
+-- 				end
+-- 			end
+-- 		end
+--     end
+
+-- 	setCurrentRoom(map[1])
+
+-- end
+
 function importMap()
 
 	print("WARNING!  You must load the map from the same room as you were when you saved the map")
 
 	EraseRooms()
 
-	local t = eb:GetText()
+    local t = eb:GetText()
+    
+--     t = [[
+-- #YE#BNNEES#R
+-- ]]
 	print("Loading this map:")
-	print(t)
+    print(t)
 
-	raywashere = t
+    -- if (string.sub(t,1,1) == "$" or string.sub(t,1,1) == "#") then
+    --     print("Importing map from EndlessHallsHelper!")
+    --     return importFromEHH(t)
+    -- end
+
 	local l = string.len(t)
 
 	print("Length:",l)
@@ -624,6 +858,9 @@ function importMap()
 
 end
 
+local Exporting_To_EHH = false
+local EHH_Directions = ""
+
 function dumpMap()
 
 	local serialized = "index,poi,north_neighbor,east_neighbor,south_neighbor,west_neighbor,n_wall,e_wall,s_wall,w_wall,x,y,current,-\n"
@@ -673,16 +910,36 @@ function dumpMap()
 	eb:SetText(serialized)
 end
 
-local function resetVisited()
-	for k,v in pairs(rooms) do
-		v.visited = false
+local function outputGuidanceToEHH(directions, POIs, targetRoom, startingRoom)
+    local steps = (table.getn(directions)-1)
+
+    --print("Guiding from " .. tostring(startingRoom.poi_index) .. " to " .. tostring(targetRoom.poi_index))
+
+	local dirLetters = {"N","E","S","W"}
+    local navString = "" .. EHHPOIStrings[startingRoom.poi_index]
+
+	if (targetRoom.poi_index == 11) then
+        print("Error, EHH does not care about unexplored rooms")
+        return
 	end
+
+	--directions[1] is always "0" due to a lazy design decision
+	for i=2,#directions do
+        navString = navString..dirLetters[directions[i]]
+        if (POIs[i] ~= 0) then
+            navString = navString .. EHHPOIStrings[POIs[i]]
+        end
+	end
+
+    print(navString)
+    EHH_Directions = EHH_Directions .. navString .. "\n"
 end
 
 local function outputGuidance(directions)
-	local steps = (table.getn(directions)-1)
 
-	local navString = ""
+    local steps = (table.getn(directions)-1)
+
+    local navString = ""
 
 	if (navtarget == 11) then
 		if (steps ~= 1) then
@@ -794,7 +1051,14 @@ local function navigateToTarget(targetRoom, startingRoom)
 	-- startingRoom, without even bothering to cache the results or
 	-- anything (: D
 
-	local directionsQueue = {}
+    -- Sorry about the horribly sloppy queue, I was too lazy
+    -- to figure out how to make a functional class to bundle
+    -- up the data, start/end indices, and init/empty/push/pop methods
+
+    -- also sorry about the parallel queue for POIs and directions,
+    -- needed the POI state for exporting to EHH
+    local directionsQueue = {}
+    local poiQueue = {}
 
 	resetVisited()
 
@@ -802,51 +1066,72 @@ local function navigateToTarget(targetRoom, startingRoom)
 	local rq1 = 1
 	local rq2 = 1
 
-	local targetQueue = {}
 	local dq1 = 1
-	local dq2 = 1
+    local dq2 = 1
+    
+    local poi1 = 1
+    local poi2 = 1
 
 	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
 	dq1, dq2 = luaSucksQueueInit(directionsQueue, dq1, dq2)
+	poi1, poi2 = luaSucksQueueInit(poiQueue, poi1, poi2)
 
 	resetVisitedKludge()
 
 	local tempDirections = {0}
+	local tempPOI = {0}
 
 	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, startingRoom)
 	dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, tempDirections)
+	poi1, poi2 = luaSucksQueuePush(poiQueue, poi1, poi2, tempPOI)
 
 	while (not luaSucksQueueEmpty(roomQueue, rq1, rq2)) do
-		local cur
+        local cur
 		dq1, dq2, tempDirections = luaSucksQueuePop(directionsQueue, dq1, dq2)
 		rq1, rq2, cur = luaSucksQueuePop(roomQueue, rq1, rq2)
+        poi1, poi2, tempPOI = luaSucksQueuePop(poiQueue, poi1, poi2)
 
 		if (not cur.visited) then
 			cur.visited = true
 
 			for i=1,4 do
 				local newDirections = {}
+                local newPOIs = {}
 
 				local n = cur.neighbors[i]
 				local n2 = nil
-				if (n ~= nil) then
+				if (n ~= nil and cur.walls[i] == false) then
 					for k,v in pairs(tempDirections) do
 						newDirections[k] = v
 					end
-					newDirections[#newDirections+1] = i
+                    newDirections[#newDirections+1] = i
+
+                    for k,v in pairs(tempPOI) do
+                        newPOIs[k] = v
+                    end
+                    newPOIs[#newPOIs+1] = n.poi_index
 
 					if (n == targetRoom) then
 						--Found it!
-						outputGuidance(newDirections)
+                        -- hoo boy, starting to regret all the global variables
+                        -- I used instead of proper parameters..
+                        if (Exporting_To_EHH) then
+                            outputGuidanceToEHH(newDirections, newPOIs, targetRoom, startingRoom)
+                        else
+                            outputGuidance(newDirections)
+                        end
 						return
 					end
 
 					rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n)
-					dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, newDirections)
+                    dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, newDirections)
+                    poi1, poi2 = luaSucksQueuePush(poiQueue, poi1, poi2, newPOIs)
 				end
 			end
 		end
-	end
+    end
+
+    print("No route from current room to target found, keep wandering until you hit a known POI so you can reattach to the rest of the map")
 end
 
 local function navigate()
@@ -858,6 +1143,90 @@ local function navigate()
 	else
 		navigateToUnexplored()
 	end
+end
+
+function hitTheTrap()
+    local prevRoom = current_room.neighbors[getOppositeDir(last_dir)]
+    prevRoom.neighbors[last_dir] = nil
+    prevRoom.walls[last_dir] = true
+    print("Looks like room " .. prevRoom.index .. "'s " .. direction_strings[last_dir] .. " exit led to the trap.  Marking it as a wall" )
+
+    recolorRoom(prevRoom)
+
+    current_room.neighbors[getOppositeDir(last_dir)] = nil
+
+    local r = newRoom()
+    local dx, dy = 0, 0
+    dy = buttonH + 5
+	local offsetX, offsetY = dx, dy
+	while true do
+		local found
+
+		-- Keep from drawing rooms on top of each other on the map
+		for k,v in pairs(rooms) do
+			if v.x == current_room.x + offsetX and v.y == current_room.y + offsetY then
+				offsetX = offsetX + dx
+				offsetY = offsetY + dy
+				found = true
+			end
+		end
+
+		if not found then
+			break
+		end
+	end
+
+	r.x = current_room.x + offsetX
+	r.y = current_room.y + offsetY
+
+	createButton(r)
+
+	setRoomNumber(r)
+    setCurrentRoom(r)
+end
+
+pois = {}
+function exportEHH()
+    Exporting_To_EHH = true
+    EHH_Directions = ""
+    pois = {}
+    for i=1,10 do
+        if (poirooms[i] ~= nil) then
+            pois[#pois+1] = i
+        end
+    end
+    if (#pois < 2) then
+        print("Error, could not export to EndlessHallsHelper because fewer than 2 POIs have been found")
+        return
+    end
+
+    -- local i = 1
+    -- local targetRoom = pois[i]
+    -- i = i + 1
+    -- local startingRoom = pois[i]
+    -- while (true) do
+    --     navigateToTarget(poirooms[targetRoom], poirooms[startingRoom])
+    --     targetRoom = startingRoom
+    --     i = i + 1
+    --     if (i > #pois) then
+    --         break
+    --     end
+    --     startingRoom = pois[i]
+    -- end
+
+    for i=1,9 do
+        for j=i+1,10 do
+            if (i ~= j) then
+                local targetRoom = pois[j]
+                local startingRoom = pois[i]
+                navigateToTarget(poirooms[targetRoom], poirooms[startingRoom])
+            end
+        end
+    end
+
+    print("Routes for EndlessHallsHelper have been exported to the tiny box in the lower left corner.  Hit CTRL+A and CTRL+C to copy it, then paste into the box on nightswimmer.github.io/EndlessHalls to generate a cool map.  If the page returns an error, one or more of the routes probably includes a teleport trap, so try deleting them one at a time.")
+    eb:SetText(EHH_Directions)
+    Exporting_To_EHH = false
 end
 
 local function setGuidanceClick(self)
@@ -924,7 +1293,11 @@ local function initialize()
 	-- local reset = ng:New(addonName, "Button", nil, mf)
 	-- reset:SetPoint("BOTTOM", mf, "BOTTOM", -50, 10)
 	-- reset:SetScript("OnClick", ResetMap)
-	-- reset:SetText("Reset map")
+    -- reset:SetText("Reset map")
+
+    -- local TRAP = ng:New(addonName, "Button", nil, mf)
+    -- TRAP:SetPoint("BOTTOM", mf, "BOTTOM", -50, 10)
+    -- TRAP:SetScript("OnClick", print)
 
 	for i = 1,5 do
 		local btn = ng:New(addonName, "Button", nil, mf)
@@ -968,7 +1341,13 @@ local function initialize()
 	wall_buttons[4]:SetPoint("TOPLEFT", mf, "TOPLEFT", 250, -40)
 	wall_buttons[4]:SetSize(100, 18)
 	wall_buttons[3]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -60)
-	wall_buttons[3]:SetSize(100, 18)
+    wall_buttons[3]:SetSize(100, 18)
+    
+    local btn = ng:New(addonName, "Button", nil, mf)
+    btn:SetScript("OnClick", hitTheTrap)
+	btn:SetSize(120, 18)
+    btn:SetText("I just got ported!")
+	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 420, -70)
 
 	--TODO: Figure out how to make a normal text label instead of a button
 	local btn = ng:New(addonName, "Button", nil, mf)
@@ -1007,17 +1386,24 @@ local function initialize()
 	eb = ng:New(addonName, "Editbox", nil, mf)
 	eb:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 20, 20)
 	eb:SetSize(110, 18)
-	eb:SetText("CTRL+A, CTRL+C")
+    eb:SetText("CTRL+A, CTRL+C")
+    eb:SetMultiLine(true)
+
+	btn = ng:New(addonName, "Button", nil, mf)
+	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 150, 50)
+	btn:SetSize(120, 18)
+	btn:SetScript("OnClick", exportEHH)
+    btn:SetText("Export EHH Routes")
 
 	btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 140, 30)
-	btn:SetSize(130, 18)
+	btn:SetSize(140, 18)
 	btn:SetScript("OnClick", dumpMap)
 	btn:SetText("Export Map to Box")
 
 	btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 140, 10)
-	btn:SetSize(130, 18)
+	btn:SetSize(140, 18)
 	btn:SetScript("OnClick", importMap)
 	btn:SetText("Import Map From Box")
 
