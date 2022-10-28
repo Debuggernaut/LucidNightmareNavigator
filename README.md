@@ -3,6 +3,9 @@ Addon that keeps track of the wacky maze ("The Endless Halls") required for the 
 
 https://www.wowhead.com/guides/lucid-nightmare-secret-mount#seventh-note-endless-halls
 
+EDIT: See https://github.com/Debuggernaut/LucidNightmareNavigator/issues/3#issuecomment-757395533 for some debugging steps to 
+try if the addon isn't working, or feel free to open a new issue (I might not have time to reply quickly though)
+
 This addon automatically draws out a pretty useless map as you're running around, but it also keeps track of everywhere you run,
 and it can give you turn-by-turn navigation directions back to a point of interest or the nearest unexplored territory.  Just hit
 the "wall" buttons at the top of the addon to mark which cardinal directions are impassible, and let the addon guide you to glory!
