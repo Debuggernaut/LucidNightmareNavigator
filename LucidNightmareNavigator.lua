@@ -1422,9 +1422,12 @@ local function initialize()
 
 	print ("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
 	print ("-------------")
-	print ("Don't bother checking the map too carefully, because the maze is three-dimensional and it doesn't appear that every room is actually perfectly square (or the connections between them are different lengths in actual space, anyway).  This means that if you try to carefully graph everything out, you'll end up with strange overlaps, loops, and places where things don't meet up.")
 	print("The addon is going to watch you and build a map in memory, but since it can't see runes, orbs, or walls, you're going to have to help it out by clicking the buttons to indicate which walls are passable and which have rubble, and which rooms have orbs/runes.")
 	print("Please don't pick up any runes or put them in any orbs until you've found all the runes and orbs with the addon's help.  If you get lost, the addon will guide you to the nearest unexplored path or you can ask it for directions to the nearest node/rune")
+	print("UPDATE OCT 2022: We now know that the maze is 2D, but there's a teleporter trap room.  That means that going into that room will drop you into a random spot on the map")
+	print("Unfortunately old Wonderpants isn't smart enough to figure out a good way to automatically detect that and deal with it, and I'm too lazy to put in a good workaround")
+	print("If you have trouble, I recommend that you use the addon's import/export function to save routes to and from various runes/orbs, then use those partial routes rather than assuming the whole map is OK.  Or you could backtrack across each route as you find it, and then when one backtracking fails, you know you've found the teleport trap.. hoo boy, sounds like a hassle")
+	print("(for what it's worth, I've cleared the maze over a dozen times even with the teleport trap screwing the map up, and it hasn't been TOO bad)")
 end
 
 -- slash command

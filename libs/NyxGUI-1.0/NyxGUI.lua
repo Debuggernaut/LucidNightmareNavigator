@@ -228,14 +228,21 @@ function ng:GetFont(addon, theme, t)
  return font
 end
 
+fucktest = "s"
+fuck2 = "s"
+
 local function checkFont(addon, theme, t)
  local font = ng:GetFont(addon, theme, t)
  local name, height = font:GetFont()
  local r, g, b, a = font:GetTextColor()
  local th = themes[addon][theme]
 
+ fucktest = font
+ fuck2 = th
+
  if name ~= th["f_"..t.."_name"] or height ~= th["f_"..t.."_h"] then
-  font:SetFont(th["f_"..t.."_name"], th["f_"..t.."_h"], th["f"..t.."_flags"])
+      font:SetFont(DEFAULT_CHAT_FRAME:GetFont());
+  --font:SetFont(th["f_"..t.."_name"], th["f_"..t.."_h"], th["f"..t.."_flags"])
  end
 
  font:SetTextColor(ng.hex2rgba(th["f_"..t.."_color"]))
