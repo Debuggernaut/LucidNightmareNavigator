@@ -3,11 +3,11 @@
 	<Button name="NyxGUIListButton" virtual="true">
 		<Size><AbsDimension x="80" y="12"/></Size>
 	
-		<Backdrop bgFile="Interface\Buttons\GreyscaleRamp64" edgeFile="Interface\Buttons\WHITE8X8">
+<!-- 		<Backdrop bgFile="Interface\Buttons\GreyscaleRamp64" edgeFile="Interface\Buttons\WHITE8X8">
 			<Color r="0" g="0" b="0" a="0"/>
 			<BorderColor r="0.1" g="0.1" b="0.1" a="0.2"/>
 			<EdgeSize val="1"/>
-		</Backdrop>
+		</Backdrop> -->
 
 		<HighlightTexture file="Interface\QuestFrame\UI-QuestLogTitleHighlight" alphaMode="ADD">
 			<Anchors>
