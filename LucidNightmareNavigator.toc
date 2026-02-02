@@ -1,6 +1,6 @@
-## Interface: 100000
+## Interface: 120000, 120001
 ## Title: Lucid Nightmare Navigator
-## Author: Wonderpants US - Thrall
+## Author: Bernycinders-Thrall (USA)
 ## Notes: Directs you through the Endless Halls maze
 ## eMail: wpants@hardmodecode.com
 ## DefaultState: Enabled
