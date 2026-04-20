@@ -1,3 +1,44 @@
+commit 0271421
+Author: Servando Luviano
+Date: Apr. 20th, 2026
+Description:
+  Performance improvements — algorithmic refactors across navigation functions:
+  - luaSucksQueuePop: nil out consumed entries to release GC references
+  - navigateToUnexplored: replaced O(n) table.remove front-dequeue with a
+    head-pointer queue; eliminated two parallel arrays and manual size counter
+  - navigateToTarget: replaced three parallel queues and per-step O(depth)
+    direction array copying with a single parent-pointer node queue; path is
+    reconstructed once in O(depth) only when target is found
+  - deDuplicateMap: merged two consecutive for-i=1,4 loops into one pass
+
+commit dc97d0c
+Author: Servando Luviano
+Date: Apr. 20th, 2026
+Description:
+  Bug fix — setWallClick now calls navigateKludge() after toggling a wall so
+  navigation directions always reflect the current wall state (previously
+  directions could remain stale, e.g. "Go east" after east was marked as wall)
+
+commit 755a9e0 / 5f61b50
+Author: Servando Luviano
+Date: Apr. 20th, 2026
+Description:
+  Teleport trap reliability — entry-direction validation + move history rollback:
+  - New state: move_history stack, pending_validation, pending_exit_dir,
+    settle_ticks, SETTLE_TICKS, MAX_HISTORY
+  - validateEntry(): verifies arrival door is opposite of exit door
+  - rollbackLastTransition(): severs bad edges; NIC disambiguation via
+    mismatch_count (2 mismatches on same dir/room = NIC, not trap)
+  - addRoom() now returns is_new_room flag as second return value
+  - update() rewritten as two-phase commit with settle countdown
+  - EraseRooms() now resets all history/pending state
+  - deDuplicateMap: fixed missing nil guard around dcur cleanup block
+  - Added DESCRIPTION.md with maze mechanics documentation
+  - Added IMPLEMENTATION_PLAN.md with 9-step fix plan (steps 1-8 complete)
+  - Code style: consistent operator spacing and indentation normalised
+    throughout importMap, dumpMap, outputGuidance, outputGuidanceToEHH,
+    ehhPOINum, updateNavButtonText
+
 Author: Ray
 Date: Sep. 7th
 Description:
