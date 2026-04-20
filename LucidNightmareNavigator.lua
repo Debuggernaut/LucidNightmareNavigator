@@ -529,8 +529,10 @@ local function luaSucksQueuePop(crappyLuaQueue, minIndex, maxIndex)
 		return minIndex, maxIndex, nil
 	end
 
+	local val = crappyLuaQueue[minIndex]
+	crappyLuaQueue[minIndex] = nil -- release reference for GC
 	local newMin = minIndex + 1
-	return newMin, maxIndex, crappyLuaQueue[minIndex]
+	return newMin, maxIndex, val
 end
 
 --Returns true if empty
@@ -582,9 +584,7 @@ local function deDuplicateMap(orig, dupe)
 						--print("AH CRAP, room " .. cur.index .. " might be a trap, since it doesn't match " .. dcur.index);
 					end
 				end
-			end
 
-			for i = 1, 4 do
 				local n = cur.neighbors[i]
 				local n2 = nil
 				if (dcur ~= nil) then
@@ -652,7 +652,7 @@ local function setPOIClick(self)
 
 	if (poirooms[self.poi_index] ~= nil and poi_warned ~= self.poi_index) then
 		print("WOAH WOAH WOAH, this point of interest was already defined as room " ..
-		poirooms[self.poi_index].index .. "!  Click again to confirm a loop in the map and de-duplicate nodes")
+			poirooms[self.poi_index].index .. "!  Click again to confirm a loop in the map and de-duplicate nodes")
 		poi_warned = self.poi_index
 		return
 	end
@@ -1123,49 +1123,45 @@ local function outputGuidance(directions)
 end
 
 local function navigateToUnexplored()
-	-- perform a depth-first traversal until you encounter an unexplored room
+	-- perform a breadth-first traversal until you encounter an unexplored room
 	-- and then print out directions to it for the user
-	local roomstack = {}
-	local roomstacksize = 0
-	local directionsStack = {}
+	local queue = {}
+	local qHead = 1
+	local qTail = 0
 
 	resetVisited()
 
-	-- PERFORMANCE WARNING!!! This Lua table is actually
-	-- some sort of bloated associative array, NOT a normal stack
-	table.insert(roomstack, current_room)
-	roomstacksize = roomstacksize + 1
+	-- Seed the queue with the starting room.
+	-- Each entry bundles the room and the direction path taken to reach it,
+	-- so we avoid two parallel arrays and O(n) front-removal.
+	qTail = qTail + 1
+	queue[qTail] = { room = current_room, directions = { 0 } }
 
-	-- Directions: 0 is the starting point,
-	-- after that it's an array of directions taken to get
-	-- to the current room
-	local tempDirections = { 0 }
-	table.insert(directionsStack, tempDirections)
+	while qHead <= qTail do
+		local entry = queue[qHead]
+		queue[qHead] = nil -- release reference for GC
+		qHead = qHead + 1
 
-	while (roomstacksize > 0) do
-		local cur = table.remove(roomstack, 1)
-		roomstacksize = roomstacksize - 1
-		cur.visited = true
+		local cur = entry.room
+		if not cur.visited then
+			cur.visited = true
+			local tempDirections = entry.directions
 
-		local tempDirections = table.remove(directionsStack, 1)
+			for i = 1, 4 do
+				if not cur.walls[i] then
+					local newDirections = {}
+					for k, v in pairs(tempDirections) do
+						newDirections[k] = v
+					end
+					newDirections[#newDirections + 1] = i
 
-		for i = 1, 4 do
-			if (not cur.walls[i]) then
-				local newDirections = {}
-				for k, v in pairs(tempDirections) do
-					newDirections[k] = v
-				end
-				newDirections[#newDirections + 1] = i
-
-				local n = cur.neighbors[i]
-				if (n == nil) then
-					outputGuidance(newDirections)
-					return
-				else
-					if (not n.visited) then
-						table.insert(roomstack, n)
-						roomstacksize = roomstacksize + 1
-						table.insert(directionsStack, newDirections)
+					local n = cur.neighbors[i]
+					if n == nil then
+						outputGuidance(newDirections)
+						return
+					elseif not n.visited then
+						qTail = qTail + 1
+						queue[qTail] = { room = n, directions = newDirections }
 					end
 				end
 			end
@@ -1173,7 +1169,7 @@ local function navigateToUnexplored()
 	end
 
 	print(
-	"Hmm, that's odd, according to this you have no unexplored territory.. maybe try navigating to some other point of interest and check the wall settings on your way ")
+		"Hmm, that's odd, according to this you have no unexplored territory.. maybe try navigating to some other point of interest and check the wall settings on your way ")
 end
 
 -- Navigates to global "navtarget"
@@ -1185,91 +1181,72 @@ local function navigateToTarget(targetRoom, startingRoom)
 	-- NOTE: It would be much faster in this case to simultaneously
 	-- spider out from both targetRoom and startingRoom at the same
 	-- time, then return the directions for where they meet
-	-- I don't feel like bothering to chew through all that coding,
-	-- though, so I'm going to take the extra half-assed approach
-	-- and just do a normal breadth-first traversal starting at
-	-- startingRoom, without even bothering to cache the results or
-	-- anything (: D
 
-	-- Sorry about the horribly sloppy queue, I was too lazy
-	-- to figure out how to make a functional class to bundle
-	-- up the data, start/end indices, and init/empty/push/pop methods
-
-	-- also sorry about the parallel queue for POIs and directions,
-	-- needed the POI state for exporting to EHH
-	local directionsQueue = {}
-	local poiQueue = {}
+	-- BFS using a single queue of parent-pointer nodes.
+	-- Each node stores {room, parent, dir, poi} forming a singly-linked list
+	-- back to the start.  When the target is found we walk that list once to
+	-- reconstruct the directions array — no per-step array copies needed.
 
 	resetVisited()
-
-	local roomQueue = {}
-	local rq1 = 1
-	local rq2 = 1
-
-	local dq1 = 1
-	local dq2 = 1
-
-	local poi1 = 1
-	local poi2 = 1
-
-	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
-	dq1, dq2 = luaSucksQueueInit(directionsQueue, dq1, dq2)
-	poi1, poi2 = luaSucksQueueInit(poiQueue, poi1, poi2)
-
 	resetVisitedKludge()
 
-	local tempDirections = { 0 }
-	local tempPOI = { 0 }
+	local queue = {}
+	local qHead = 1
+	local qTail = 0
 
-	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, startingRoom)
-	dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, tempDirections)
-	poi1, poi2 = luaSucksQueuePush(poiQueue, poi1, poi2, tempPOI)
+	-- Seed: sentinel node for the starting room (parent = nil, dir = 0)
+	qTail = qTail + 1
+	queue[qTail] = { room = startingRoom, parent = nil, dir = 0, poi = 0 }
 
-	while (not luaSucksQueueEmpty(roomQueue, rq1, rq2)) do
-		local cur
-		dq1, dq2, tempDirections = luaSucksQueuePop(directionsQueue, dq1, dq2)
-		rq1, rq2, cur = luaSucksQueuePop(roomQueue, rq1, rq2)
-		poi1, poi2, tempPOI = luaSucksQueuePop(poiQueue, poi1, poi2)
+	while qHead <= qTail do
+		local node = queue[qHead]
+		queue[qHead] = nil  -- release reference for GC
+		qHead = qHead + 1
 
+		local cur = node.room
 		if (not cur.visited) then
 			cur.visited = true
 
 			for i = 1, 4 do
-				local newDirections = {}
-				local newPOIs = {}
-
 				local n = cur.neighbors[i]
-				local n2 = nil
 				if (n ~= nil and cur.walls[i] == false) then
-					for k, v in pairs(tempDirections) do
-						newDirections[k] = v
-					end
-					newDirections[#newDirections + 1] = i
-
-					for k, v in pairs(tempPOI) do
-						newPOIs[k] = v
-					end
-					newPOIs[#newPOIs + 1] = n.poi_index
+					local childNode = { room = n, parent = node, dir = i, poi = n.poi_index }
 
 					if (n == targetRoom) then
-						--Found it!
-						-- hoo boy, starting to regret all the global variables
-						-- I used instead of proper parameters..
+						-- Found it!  Reconstruct directions by walking parent pointers.
+						-- Build in reverse, then flip — avoids O(n) table.insert(_, 1, _).
+						local revDirs = {}
+						local revPOIs = {}
+						local step = childNode
+						while step.parent ~= nil do
+							revDirs[#revDirs + 1] = step.dir
+							revPOIs[#revPOIs + 1] = step.poi
+							step = step.parent
+						end
+
+						local directions = { 0 }
+						local poiList    = { 0 }
+						for j = #revDirs, 1, -1 do
+							directions[#directions + 1] = revDirs[j]
+							poiList[#poiList + 1]    = revPOIs[j]
+						end
+
 						if (Exporting_To_EHH) then
-							outputGuidanceToEHH(newDirections, newPOIs, targetRoom, startingRoom)
+							outputGuidanceToEHH(directions, poiList, targetRoom, startingRoom)
 						else
-							outputGuidance(newDirections)
+							outputGuidance(directions)
 						end
 						return
 					end
 
-					rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n)
-					dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, newDirections)
-					poi1, poi2 = luaSucksQueuePush(poiQueue, poi1, poi2, newPOIs)
-				end
-			end
-		end
-	end
+					if (not n.visited) then
+						qTail = qTail + 1
+						queue[qTail] = childNode
+					end
+				end  -- if n ~= nil
+			end  -- for i = 1, 4
+		end  -- if not cur.visited
+	end  -- while
 
 	print(
 	"No route from current room to target found, keep wandering until you hit a known POI so you can reattach to the rest of the map")
@@ -1291,7 +1268,7 @@ function hitTheTrap()
 	prevRoom.neighbors[last_dir] = nil
 	prevRoom.walls[last_dir] = true
 	print("Looks like room " ..
-	prevRoom.index .. "'s " .. direction_strings[last_dir] .. " exit led to the trap.  Marking it as a wall")
+		prevRoom.index .. "'s " .. direction_strings[last_dir] .. " exit led to the trap.  Marking it as a wall")
 
 	recolorRoom(prevRoom)
 
@@ -1367,7 +1344,7 @@ function exportEHH()
 	end
 
 	print(
-	"Routes for EndlessHallsHelper have been exported to the tiny box in the lower left corner.  Hit CTRL+A and CTRL+C to copy it, then paste into the box on nightswimmer.github.io/EndlessHalls to generate a cool map.  If the page returns an error, one or more of the routes probably includes a teleport trap, so try deleting them one at a time.")
+		"Routes for EndlessHallsHelper have been exported to the tiny box in the lower left corner.  Hit CTRL+A and CTRL+C to copy it, then paste into the box on nightswimmer.github.io/EndlessHalls to generate a cool map.  If the page returns an error, one or more of the routes probably includes a teleport trap, so try deleting them one at a time.")
 	eb:SetText(EHH_Directions)
 	Exporting_To_EHH = false
 end
@@ -1565,17 +1542,17 @@ local function initialize()
 	print("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
 	print("-------------")
 	print(
-	"The addon is going to watch you and build a map in memory, but since it can't see runes, orbs, or walls, you're going to have to help it out by clicking the buttons to indicate which walls are passable and which have rubble, and which rooms have orbs/runes.")
+		"The addon is going to watch you and build a map in memory, but since it can't see runes, orbs, or walls, you're going to have to help it out by clicking the buttons to indicate which walls are passable and which have rubble, and which rooms have orbs/runes.")
 	print(
-	"Please don't pick up any runes or put them in any orbs until you've found all the runes and orbs with the addon's help.  If you get lost, the addon will guide you to the nearest unexplored path or you can ask it for directions to the nearest node/rune")
+		"Please don't pick up any runes or put them in any orbs until you've found all the runes and orbs with the addon's help.  If you get lost, the addon will guide you to the nearest unexplored path or you can ask it for directions to the nearest node/rune")
 	print(
-	"UPDATE OCT 2022: We now know that the maze is 2D, but there's a teleporter trap room.  That means that going into that room will drop you into a random spot on the map")
+		"UPDATE OCT 2022: We now know that the maze is 2D, but there's a teleporter trap room.  That means that going into that room will drop you into a random spot on the map")
 	print(
-	"Unfortunately old Wonderpants isn't smart enough to figure out a good way to automatically detect that and deal with it, and I'm too lazy to put in a good workaround")
+		"Unfortunately old Wonderpants isn't smart enough to figure out a good way to automatically detect that and deal with it, and I'm too lazy to put in a good workaround")
 	print(
-	"If you have trouble, I recommend that you use the addon's import/export function to save routes to and from various runes/orbs, then use those partial routes rather than assuming the whole map is OK.  Or you could backtrack across each route as you find it, and then when one backtracking fails, you know you've found the teleport trap.. hoo boy, sounds like a hassle")
+		"If you have trouble, I recommend that you use the addon's import/export function to save routes to and from various runes/orbs, then use those partial routes rather than assuming the whole map is OK.  Or you could backtrack across each route as you find it, and then when one backtracking fails, you know you've found the teleport trap.. hoo boy, sounds like a hassle")
 	print(
-	"(for what it's worth, I've cleared the maze over a dozen times even with the teleport trap screwing the map up, and it hasn't been TOO bad)")
+		"(for what it's worth, I've cleared the maze over a dozen times even with the teleport trap screwing the map up, and it hasn't been TOO bad)")
 end
 
 -- slash command
