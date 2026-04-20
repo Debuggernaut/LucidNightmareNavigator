@@ -20,11 +20,11 @@ local east = 2
 local south = 3
 local west = 4
 
-local direction_strings = {"North","East","South","West"}
-local color_strings = {"Yellow","Blue","Red","Green","Purple"}
+local direction_strings = { "North", "East", "South", "West" }
+local color_strings = { "Yellow", "Blue", "Red", "Green", "Purple" }
 local EHHPOIStrings = {
-    "#Y","#B","#R","#G","#P",
-    "$Y","$B","$R","$G","$P"
+	"#Y", "#B", "#R", "#G", "#P",
+	"$Y", "$B", "$R", "$G", "$P"
 }
 
 local yellow = 1
@@ -41,6 +41,12 @@ local current_room
 local mf, scrollframe, container, playerframe = nil
 
 local last_dir, last_room_number
+
+local move_history = {}          -- stack of {from, dir, to, is_new_room}
+local pending_validation = false -- true while waiting for player to settle
+local pending_exit_dir = nil     -- the dir used for the pending transition
+local settle_ticks = 0           -- countdown to landing confirmation
+local SETTLE_TICKS = 3           -- frames to wait after a transition
 
 local wall_buttons = {}
 local guidance_buttons = {}
@@ -60,10 +66,23 @@ local poirooms = {}
 --               {{-1460, 740},{-1410,800}}} -- west
 
 local function getOppositeDir(dir)
-	if dir == north then return south
-	elseif dir == east then return west
-	elseif dir == south then return north
-	else return east end
+	if dir == north then
+		return south
+	elseif dir == east then
+		return west
+	elseif dir == south then
+		return north
+	else
+		return east
+	end
+end
+
+-- Returns true if arriving near entryDir is consistent with having exited via
+-- exitDir.  A player going North must arrive at the South door, etc.
+-- Returns true when entryDir is nil (player is near room centre — no signal).
+local function validateEntry(entryDir, exitDir)
+	if entryDir == nil then return true end
+	return entryDir == getOppositeDir(exitDir)
 end
 
 local function detectDir(x, y)
@@ -83,9 +102,66 @@ local function centerCam(x, y)
 	scrollframe:SetVerticalScroll(y - 250 + buttonH / 2)
 end
 
+-- Severs the most recently committed edge when an entry-direction mismatch is
+-- detected (teleport trap).  Handles NIC room disambiguation: if the same
+-- room/direction pair mismatches twice it is a Non-Intersecting Cross, not a
+-- trap, and the edge is restored instead.
+local function rollbackLastTransition()
+	if #move_history == 0 then return end
+
+	local move = table.remove(move_history)
+
+	-- NIC disambiguation: track per-room, per-direction mismatch count.
+	local room = move.from
+	local dir  = move.dir
+	if room.mismatch_count == nil then room.mismatch_count = {} end
+	room.mismatch_count[dir] = (room.mismatch_count[dir] or 0) + 1
+
+	if room.mismatch_count[dir] >= 2 then
+		-- Same direction from the same room mismatched twice → NIC room.
+		-- Restore the edge and mark the room so we stop checking it.
+		room.neighbors[dir] = move.to
+		move.to.neighbors[getOppositeDir(dir)] = room
+		room.is_nic = true
+		print("Room " .. room.index .. " identified as a Non-Intersecting Cross room.")
+		setCurrentRoom(move.to)
+		return
+	end
+
+	-- Teleport trap: sever the bad edge in both directions.
+	move.from.neighbors[move.dir] = nil
+	move.to.neighbors[getOppositeDir(move.dir)] = nil
+
+	-- Recycle the destination room if it was freshly created and is now orphaned.
+	if move.is_new_room then
+		local hasOtherNeighbors = false
+		for i = 1, 4 do
+			if move.to.neighbors[i] ~= nil then
+				hasOtherNeighbors = true
+				break
+			end
+		end
+		if not hasOtherNeighbors then
+			move.to.button:Hide()
+			pool[#pool + 1] = move.to.button
+			rooms[move.to.index] = nil
+		end
+	end
+
+	print("WARNING: Teleport trap detected!  The "
+		.. direction_strings[move.dir]
+		.. " exit from room " .. move.from.index
+		.. " has been marked as a wall.")
+
+	move.from.walls[move.dir] = true
+	recolorRoom(move.from)
+	updateWallButtonText()
+	setCurrentRoom(move.from)
+end
+
 
 local function resetVisited()
-	for k,v in pairs(rooms) do
+	for k, v in pairs(rooms) do
 		v.visited = false
 	end
 end
@@ -99,30 +175,30 @@ local function getUnusedButton()
 		btn.text = btn:CreateFontString()
 		btn.text:SetFont("Fonts\\FRIZQT__.TTF", 8)
 		btn.text:SetAllPoints()
-        btn.text:SetText("")
+		btn.text:SetText("")
 
-        btn.links = {}
-        dir = 1
+		btn.links = {}
+		dir = 1
 
-        for dir=1,4 do
-            btn.links[dir] = ng:New(addonName, "Frame", "room" .. tostring(#rooms) .. "w" .. tostring(dir), btn)
-            btn.links[dir]:SetBackdropColor(0.7, 0.7, 0.7, 1)
-            btn.links[dir]:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
-            btn.links[dir]:SetSize(3, 3)
-            btn.links[dir]:Show()
-        end
+		for dir = 1, 4 do
+			btn.links[dir] = ng:New(addonName, "Frame", "room" .. tostring(#rooms) .. "w" .. tostring(dir), btn)
+			btn.links[dir]:SetBackdropColor(0.7, 0.7, 0.7, 1)
+			btn.links[dir]:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
+			btn.links[dir]:SetSize(3, 3)
+			btn.links[dir]:Show()
+		end
 
-        btn.links[north]:SetPoint("TOP", btn, "TOP", 0, 3)
-        btn.links[south]:SetPoint("BOTTOM", btn, "BOTTOM", 0, -3)
-        btn.links[east]:SetPoint("RIGHT", btn, "RIGHT", 3, 0)
-        btn.links[west]:SetPoint("LEFT", btn, "LEFT", -3, 0)
+		btn.links[north]:SetPoint("TOP", btn, "TOP", 0, 3)
+		btn.links[south]:SetPoint("BOTTOM", btn, "BOTTOM", 0, -3)
+		btn.links[east]:SetPoint("RIGHT", btn, "RIGHT", 3, 0)
+		btn.links[west]:SetPoint("LEFT", btn, "LEFT", -3, 0)
 
 		return btn
 	end
 end
 
 local function createButton(r)
-    local btn = getUnusedButton()
+	local btn = getUnusedButton()
 	btn:SetPoint("TOPLEFT", container, "TOPLEFT", r.x, -r.y)
 	btn:SetBackdropColor(1, 1, 1, 1)
 	btn:SetBackdropBorderColor(0, 0, 0, 0)
@@ -131,7 +207,7 @@ local function createButton(r)
 end
 
 local function resetColor(r, c, t)
-	for k,v in pairs(rooms) do
+	for k, v in pairs(rooms) do
 		if v ~= r and v.POI_c == c and v.POI_t == t then
 			if t == "rune" then
 				v.button:SetBackdropColor(1, 1, 1, 1)
@@ -150,7 +226,7 @@ local function setRoomNumber(r)
 	else
 		r.button.text:SetTextHeight(8)
 	end
-	r.button.text:SetText("|cff000000"..r.index.."|r")
+	r.button.text:SetText("|cff000000" .. r.index .. "|r")
 	--r.number = last_room_number
 end
 
@@ -172,26 +248,26 @@ local function recolorRoom(r)
 	else -- clear
 		r.button:SetBackdropColor(1, 1, 1, 1)
 		r.button:SetBackdropBorderColor(0, 0, 0, 0)
-    end
+	end
 
-    for dir=1,4 do
-        if r.walls[dir] then
-            r.button.links[dir]:Hide()
-        else
-            r.button.links[dir]:Show()
-        end
-    end
+	for dir = 1, 4 do
+		if r.walls[dir] then
+			r.button.links[dir]:Hide()
+		else
+			r.button.links[dir]:Show()
+		end
+	end
 end
 
 local function newRoom()
 	local r = {}
 	r.neighbors = {}
-	r.walls = {false, false, false, false}
+	r.walls = { false, false, false, false }
 	--print("Making a new room")
 	--print ("r.walls[2]: ", r.walls[2])
 	r.visited = false --used for graph traversals
-	r.index = #rooms+1
-	r.poi_index=0
+	r.index = #rooms + 1
+	r.poi_index = 0
 	rooms[r.index] = r
 	return r
 end
@@ -209,31 +285,31 @@ local function getRotation(dir)
 end
 
 local function updateWallButtonText()
-	for i=1,4 do
+	for i = 1, 4 do
 		if (current_room == nil) then
-			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
+			wall_buttons[i]:SetText("No " .. direction_strings[i] .. " Wall")
 		elseif (current_room.walls[i]) then
-            wall_buttons[i]:SetText("Wall to the "..direction_strings[i])
-        else
-			wall_buttons[i]:SetText("No "..direction_strings[i].." Wall")
+			wall_buttons[i]:SetText("Wall to the " .. direction_strings[i])
+		else
+			wall_buttons[i]:SetText("No " .. direction_strings[i] .. " Wall")
 		end
 	end
 end
 
 local function setCurrentRoom(r)
-    current_room = r
-    if (r == nil) then
-        print("setCurrentRoom: Current room is nil!")
-        return
-    end
-    if (r.x == nil) then
-        print("setCurrentRoom: Current r.x is nil!",r.index)
-        r.x = 0
-    end
-    if (r.y == nil) then
-        print("setCurrentRoom: Current r.y is nil!",r.index)
-        r.y = 0
-    end
+	current_room = r
+	if (r == nil) then
+		print("setCurrentRoom: Current room is nil!")
+		return
+	end
+	if (r.x == nil) then
+		print("setCurrentRoom: Current r.x is nil!", r.index)
+		r.x = 0
+	end
+	if (r.y == nil) then
+		print("setCurrentRoom: Current r.y is nil!", r.index)
+		r.y = 0
+	end
 	centerCam(r.x, r.y)
 	playerframe:SetParent(r.button)
 	playerframe:ClearAllPoints()
@@ -244,8 +320,8 @@ local function setCurrentRoom(r)
 end
 
 local function setRoomXY(lastRoom, direction, newRoom)
-    local dir = direction
-    local r = newRoom
+	local dir = direction
+	local r = newRoom
 
 	local dx, dy = 0, 0
 
@@ -264,7 +340,7 @@ local function setRoomXY(lastRoom, direction, newRoom)
 		local found
 
 		-- Keep from drawing rooms on top of each other on the map
-		for k,v in pairs(rooms) do
+		for k, v in pairs(rooms) do
 			if v.x == lastRoom.x + offsetX and v.y == lastRoom.y + offsetY then
 				offsetX = offsetX + dx
 				offsetY = offsetY + dy
@@ -282,23 +358,22 @@ local function setRoomXY(lastRoom, direction, newRoom)
 end
 
 local function addRoom(dir)
-
 	local r = newRoom()
 	current_room.neighbors[dir] = r
 
 	r.neighbors[getOppositeDir(dir)] = current_room
 
-    setRoomXY(current_room, dir, r)
+	setRoomXY(current_room, dir, r)
 
 	createButton(r)
 
 	setRoomNumber(r)
 
-	return r
+	return r, true -- second return value: is_new_room = true
 end
 
 local function EraseRooms()
-	for k,v in pairs(rooms) do
+	for k, v in pairs(rooms) do
 		v.button:Hide()
 		pool[#pool + 1] = v.button
 	end
@@ -306,8 +381,13 @@ local function EraseRooms()
 	wipe(rooms)
 	wipe(map)
 	wipe(poirooms)
+	wipe(move_history)
 
-	last_dir = north
+	pending_validation = false
+	pending_exit_dir   = nil
+	settle_ticks       = 0
+
+	last_dir           = north
 end
 
 local function ResetMap()
@@ -326,16 +406,84 @@ local function ResetMap()
 end
 
 local ly, lx = 0, 0
+local MAX_HISTORY = 128
 local function update()
 	local y, x = UnitPosition("player")
 
+	-- Phase 2: validate a pending transition once the player has settled.
+	if pending_validation then
+		if settle_ticks > 0 then
+			settle_ticks = settle_ticks - 1
+		else
+			pending_validation = false
+			local entryDir = detectDir(x, y)
+			if not validateEntry(entryDir, pending_exit_dir) then
+				rollbackLastTransition()
+			end
+			pending_exit_dir = nil
+		end
+		lx = x
+		ly = y
+		return
+	end
+
+	-- Phase 1: detect a room transition.
 	if math.abs(x - lx) > 70 or math.abs(y - ly) > 70 then
 		local dir = detectDir(lx, ly)
 		if dir then
 			last_dir = dir
-			--print("-> Movement detected!  dir = ", dir, ", Neighbors: ", current_room.neighbors[dir])
-			setCurrentRoom(current_room.neighbors[dir] or addRoom(dir))
+
+			local existing = current_room.neighbors[dir]
+			local next_room, is_new_room
+
+			if existing ~= nil then
+				-- Back-link contradiction check: if the destination's reverse
+				-- pointer doesn't point back here, a previous bad edge exists.
+				local backLink = existing.neighbors[getOppositeDir(dir)]
+				if backLink ~= nil and backLink ~= current_room then
+					-- Scan history to find and remove the step that created
+					-- the corrupted edge.
+					for i = #move_history, 1, -1 do
+						local h = move_history[i]
+						if h.to == existing then
+							table.remove(move_history, i)
+							h.from.neighbors[h.dir] = nil
+							h.to.neighbors[getOppositeDir(h.dir)] = nil
+							print("WARNING: Back-link contradiction on room "
+								.. existing.index
+								.. " — removing corrupted edge from history.")
+							break
+						end
+					end
+					existing = current_room.neighbors[dir]
+				end
+				next_room, is_new_room = existing, false
+			end
+
+			if next_room == nil then
+				next_room, is_new_room = addRoom(dir)
+			end
+
+			-- Record this step before committing.
+			table.insert(move_history, {
+				from        = current_room,
+				dir         = dir,
+				to          = next_room,
+				is_new_room = is_new_room,
+			})
+
+			-- Cap history to prevent unbounded memory growth.
+			if #move_history > MAX_HISTORY then
+				table.remove(move_history, 1)
+			end
+
+			setCurrentRoom(next_room)
 			navigateKludge()
+
+			-- Start settle countdown for entry-direction validation.
+			pending_validation = true
+			pending_exit_dir   = dir
+			settle_ticks       = SETTLE_TICKS
 		end
 	end
 
@@ -344,25 +492,25 @@ local function update()
 end
 
 local default_theme = {
-				   l0_color      = "000000ff",
-				   l0_border     = "191919FF",
-				   l0_texture    = "Interface\\Buttons\\GreyscaleRamp64",
-				   l3_color      = "999999FF",
-				   l3_border     = "000000FF",
-				   l3_texture    = "Interface\\Buttons\\WHITE8X8",
-				   l3_texture    = "spells\\ICETEXTURE_MAGE",
-				   thumb         = "19B219FF",
-				   highlight     = "00FFffFF",
-	              -- fonts
-				   f_label_name   = "Fonts\\FRIZQT__.ttf",
-				   f_label_h      = 11,
-				   f_label_flags  = "",
-				   f_label_color  = "FFFFFFFF",
-				   f_button_name  = "Fonts\\FRIZQT__.ttf",
-				   f_button_h     = 11,
-				   f_button_flags = "",
-				   f_button_color = "FFFFFFFF",
-				  }
+	l0_color       = "000000ff",
+	l0_border      = "191919FF",
+	l0_texture     = "Interface\\Buttons\\GreyscaleRamp64",
+	l3_color       = "999999FF",
+	l3_border      = "000000FF",
+	l3_texture     = "Interface\\Buttons\\WHITE8X8",
+	l3_texture     = "spells\\ICETEXTURE_MAGE",
+	thumb          = "19B219FF",
+	highlight      = "00FFffFF",
+	-- fonts
+	f_label_name   = "Fonts\\FRIZQT__.ttf",
+	f_label_h      = 11,
+	f_label_flags  = "",
+	f_label_color  = "FFFFFFFF",
+	f_button_name  = "Fonts\\FRIZQT__.ttf",
+	f_button_h     = 11,
+	f_button_flags = "",
+	f_button_color = "FFFFFFFF",
+}
 
 local function luaSucksQueueInit(crappyLuaQueue, minIndex, maxIndex)
 	minIndex = 1
@@ -372,8 +520,8 @@ local function luaSucksQueueInit(crappyLuaQueue, minIndex, maxIndex)
 end
 
 local function luaSucksQueuePush(crappyLuaQueue, minIndex, maxIndex, newVal)
-	crappyLuaQueue[maxIndex+1] = newVal
-	return minIndex, maxIndex+1
+	crappyLuaQueue[maxIndex + 1] = newVal
+	return minIndex, maxIndex + 1
 end
 
 local function luaSucksQueuePop(crappyLuaQueue, minIndex, maxIndex)
@@ -381,8 +529,10 @@ local function luaSucksQueuePop(crappyLuaQueue, minIndex, maxIndex)
 		return minIndex, maxIndex, nil
 	end
 
+	local val = crappyLuaQueue[minIndex]
+	crappyLuaQueue[minIndex] = nil -- release reference for GC
 	local newMin = minIndex + 1
-	return newMin, maxIndex, crappyLuaQueue[minIndex]
+	return newMin, maxIndex, val
 end
 
 --Returns true if empty
@@ -426,25 +576,23 @@ local function deDuplicateMap(orig, dupe)
 		dq1, dq2, dcur = luaSucksQueuePop(dupeQueue, dq1, dq2)
 
 		if (not cur.visited) then
-            cur.visited = true
+			cur.visited = true
 
-            for i=1,4 do
-                if (dcur ~= nil and cur ~= nil) then
-                    if (cur.walls[i] ~= dcur.walls[i]) then
-                        --print("AH CRAP, room " .. cur.index .. " might be a trap, since it doesn't match " .. dcur.index);
-                    end
-                end
-            end
+			for i = 1, 4 do
+				if (dcur ~= nil and cur ~= nil) then
+					if (cur.walls[i] ~= dcur.walls[i]) then
+						--print("AH CRAP, room " .. cur.index .. " might be a trap, since it doesn't match " .. dcur.index);
+					end
+				end
 
-			for i=1,4 do
 				local n = cur.neighbors[i]
 				local n2 = nil
 				if (dcur ~= nil) then
 					n2 = dcur.neighbors[i]
-                end
+				end
 				if (n == nil) then
 					if (n2 ~= nil) then
-					    --print ("Moving "..n2.index..", attaching to "..cur.index.." instead of "..dcur.index)
+						--print ("Moving "..n2.index..", attaching to "..cur.index.." instead of "..dcur.index)
 						cur.neighbors[i] = n2
 						n2.neighbors[getOppositeDir(i)] = cur
 
@@ -457,22 +605,22 @@ local function deDuplicateMap(orig, dupe)
 				end
 			end
 
-            if (dcur ~= nil) then
-                dcur.dupedTo = cur
+			if (dcur ~= nil) then
+				dcur.dupedTo = cur
 				-- Wipe out all references to the duplicate room, and recycle
 				-- its button:
 				if (dcur.poi_index ~= 0) then
 					cur.poi_index = dcur.poi_index
-                    poirooms[cur.poi_index] = cur
-                    print("poi index",cur.poi_index," was ",dcur.index," now ", cur.index)
+					poirooms[cur.poi_index] = cur
+					print("poi index", cur.poi_index, " was ", dcur.index, " now ", cur.index)
 				end
 				wipe(dcur.neighbors)
 				wipe(dcur.walls)
-                rooms[dcur.index] = nil
-                if (dcur.button ~= nil) then
-                    dcur.button:Hide()
-			    	pool[#pool + 1] = dcur.button
-                end 
+				rooms[dcur.index] = nil
+				if (dcur.button ~= nil) then
+					dcur.button:Hide()
+					pool[#pool + 1] = dcur.button
+				end
 			end
 		end
 	end
@@ -486,7 +634,6 @@ end
 
 local poi_warned = 0
 local function setPOIClick(self)
-
 	if (self.poi_index == nil) then
 		-- Clear room
 		if (poirooms[current_room.poi_index] ~= nil) then
@@ -504,7 +651,8 @@ local function setPOIClick(self)
 	--TODO: Warning popup before de-duplicating the map
 
 	if (poirooms[self.poi_index] ~= nil and poi_warned ~= self.poi_index) then
-		print ("WOAH WOAH WOAH, this point of interest was already defined as room "..poirooms[self.poi_index].index.."!  Click again to confirm a loop in the map and de-duplicate nodes")
+		print("WOAH WOAH WOAH, this point of interest was already defined as room " ..
+			poirooms[self.poi_index].index .. "!  Click again to confirm a loop in the map and de-duplicate nodes")
 		poi_warned = self.poi_index
 		return
 	end
@@ -528,7 +676,7 @@ local function setPOIClick(self)
 end
 
 local function updateNavButtonText()
-	for i=1,11 do
+	for i = 1, 11 do
 		local btn = guidance_buttons[i]
 
 		local text = ""
@@ -536,13 +684,13 @@ local function updateNavButtonText()
 		if (i == 11) then
 			text = "Unexplored Territory"
 		elseif (i > 0 and i < 6) then
-			text = color_strings[i].." Rune"
+			text = color_strings[i] .. " Rune"
 		elseif (i > 5 and i < 11) then
-			text = color_strings[i-5].." Orb"
+			text = color_strings[i - 5] .. " Orb"
 		end
 
 		if (i == navtarget) then
-			text = "["..text.."]"
+			text = "[" .. text .. "]"
 		end
 
 		btn:SetText(text)
@@ -552,18 +700,18 @@ end
 eb = {}
 
 local EHHPOINums = {}
-for i=1,#EHHPOIStrings do
-    EHHPOINums[EHHPOIStrings[i]] = i
+for i = 1, #EHHPOIStrings do
+	EHHPOINums[EHHPOIStrings[i]] = i
 end
 
 function ehhPOINum(ehhPOIStr)
-    local poiNum = EHHPOINums[ehhPOIStr]
+	local poiNum = EHHPOINums[ehhPOIStr]
 
-    if (poiNum == nil) then
-        print("Error parsing input, could not understand "..ehhPOIStr)
-    end
+	if (poiNum == nil) then
+		print("Error parsing input, could not understand " .. ehhPOIStr)
+	end
 
-    return poiNum
+	return poiNum
 end
 
 -- Woe upon any who dares to try and run this cursed code
@@ -739,53 +887,52 @@ end
 -- end
 
 function importMap()
-
 	print("WARNING!  You must load the map from the same room as you were when you saved the map")
 
 	EraseRooms()
 
-    local t = eb:GetText()
-    
---     t = [[
--- #YE#BNNEES#R
--- ]]
-	print("Loading this map:")
-    print(t)
+	local t = eb:GetText()
 
-    -- if (string.sub(t,1,1) == "$" or string.sub(t,1,1) == "#") then
-    --     print("Importing map from EndlessHallsHelper!")
-    --     return importFromEHH(t)
-    -- end
+	--     t = [[
+	-- #YE#BNNEES#R
+	-- ]]
+	print("Loading this map:")
+	print(t)
+
+	-- if (string.sub(t,1,1) == "$" or string.sub(t,1,1) == "#") then
+	--     print("Importing map from EndlessHallsHelper!")
+	--     return importFromEHH(t)
+	-- end
 
 	local l = string.len(t)
 
-	print("Length:",l)
+	print("Length:", l)
 	local i = 1
 	while (i <= l) do
 		--Lua seems to strip newlines out of the string when I read
 		-- it, just end rooms with a "-" token to work around it
-		local l1,l2 = string.find(t,"-",i,true)
+		local l1, l2 = string.find(t, "-", i, true)
 		if (l2 == nil) then
 			l2 = l
 		end
-		local line = string.sub(t,i,l2-1)
+		local line = string.sub(t, i, l2 - 1)
 		i = l2
 		--print (line)
 
 		local substrings = {}
-		local j=1
+		local j = 1
 		local linelength = string.len(line)
 		while (j <= linelength) do
-			local t1,t2 = string.find(line,",",j,true)
+			local t1, t2 = string.find(line, ",", j, true)
 			if (t1 == nil) then
-				t2 = l+1
+				t2 = l + 1
 			end
-			local token = string.sub(line,j,t2-1)
+			local token = string.sub(line, j, t2 - 1)
 			j = t2
 
-			substrings[#substrings+1] = token
+			substrings[#substrings + 1] = token
 
-			j = j+1
+			j = j + 1
 		end
 
 		last_room_number = #rooms
@@ -795,41 +942,40 @@ function importMap()
 		if (room.index ~= nil) then
 			room.poi_index = tonumber(substrings[2])
 			room.neighbor_indices = {}
-			for neighbor=1,4 do
-				room.neighbor_indices[neighbor] = tonumber(substrings[2+neighbor])
+			for neighbor = 1, 4 do
+				room.neighbor_indices[neighbor] = tonumber(substrings[2 + neighbor])
 			end
-			room.walls = {false, false, false, false}
-			for wall=1,4 do
-				room.walls[wall] = (substrings[6+wall]=="W")
+			room.walls = { false, false, false, false }
+			for wall = 1, 4 do
+				room.walls[wall] = (substrings[6 + wall] == "W")
 			end
-			room.visited=false
-			room.neighbors={}
+			room.visited = false
+			room.neighbors = {}
 
 			rooms[room.index] = room
 
 			room.x = tonumber(substrings[11])
 			room.y = tonumber(substrings[12])
 
-			if (substrings[13]=="current") then
-				print ("Current room is ",room.index)
+			if (substrings[13] == "current") then
+				print("Current room is ", room.index)
 				current_room = room
 			end
 		else
-			print("Ignoring line '"..line.."'")
+			print("Ignoring line '" .. line .. "'")
 		end
 
 		i = i + 1
-
 	end
 
 
-	for k,v in pairs(rooms) do
-		for neighbor=1,4 do
+	for k, v in pairs(rooms) do
+		for neighbor = 1, 4 do
 			local nIndex = v.neighbor_indices[neighbor]
 
 			if (v.neighbor_indices[neighbor] ~= nil) then
 				if (rooms[nIndex] == nil) then
-					print("Error, room ", v.index, " indicates it's neighbors with room ",nIndex,",which was not found")
+					print("Error, room ", v.index, " indicates it's neighbors with room ", nIndex, ",which was not found")
 				else
 					v.neighbors[neighbor] = rooms[nIndex]
 				end
@@ -854,98 +1000,95 @@ function importMap()
 			setCurrentRoom(v)
 		end
 	end
-
-
 end
 
 local Exporting_To_EHH = false
 local EHH_Directions = ""
 
 function dumpMap()
+	local serialized =
+	"index,poi,north_neighbor,east_neighbor,south_neighbor,west_neighbor,n_wall,e_wall,s_wall,w_wall,x,y,current,-\n"
 
-	local serialized = "index,poi,north_neighbor,east_neighbor,south_neighbor,west_neighbor,n_wall,e_wall,s_wall,w_wall,x,y,current,-\n"
-
-	local dirLetters = {"N","E","S","W"}
-	for k,v in pairs(rooms) do
-		serialized=serialized..v.index..","..v.poi_index
+	local dirLetters = { "N", "E", "S", "W" }
+	for k, v in pairs(rooms) do
+		serialized = serialized .. v.index .. "," .. v.poi_index
 
 		local neighborString = ""
 		local wallString = ""
 
 		local serializedNeighbors = ""
 		local serializedWalls = ""
-		for i=1,4 do
+		for i = 1, 4 do
 			if (v.walls[i]) then
-				serializedWalls=serializedWalls..",W"
-				wallString = wallString..dirLetters[i]..":W,"
+				serializedWalls = serializedWalls .. ",W"
+				wallString = wallString .. dirLetters[i] .. ":W,"
 			else
-				serializedWalls=serializedWalls..", "
-				wallString = wallString..dirLetters[i]..": ,"
+				serializedWalls = serializedWalls .. ", "
+				wallString = wallString .. dirLetters[i] .. ": ,"
 			end
 			if (v.neighbors[i] == nil) then
-				serializedNeighbors=serializedNeighbors..", "
-				neighborString = neighborString..dirLetters[i]..":X,"
+				serializedNeighbors = serializedNeighbors .. ", "
+				neighborString = neighborString .. dirLetters[i] .. ":X,"
 			else
-				serializedNeighbors=serializedNeighbors..","..v.neighbors[i].index
-				neighborString = neighborString..dirLetters[i]..":"..v.neighbors[i].index..","
+				serializedNeighbors = serializedNeighbors .. "," .. v.neighbors[i].index
+				neighborString = neighborString .. dirLetters[i] .. ":" .. v.neighbors[i].index .. ","
 			end
 		end
 
-		serialized=serialized..serializedNeighbors..serializedWalls
-		serialized=serialized..","..v.x..","..v.y..","
+		serialized = serialized .. serializedNeighbors .. serializedWalls
+		serialized = serialized .. "," .. v.x .. "," .. v.y .. ","
 
 		local curString = ""
 		if (current_room == v) then
-			serialized=serialized.."current,"
+			serialized = serialized .. "current,"
 			curString = " (YOU ARE HERE) "
 		else
-			serialized=serialized..","
+			serialized = serialized .. ","
 		end
 
-		serialized=serialized.."-\n"
+		serialized = serialized .. "-\n"
 
 
-		print("Room "..(k)..curString.." POI: ",v.poi_index," N:[",neighborString,"] W:[",wallString,"]")
+		print("Room " .. (k) .. curString .. " POI: ", v.poi_index, " N:[", neighborString, "] W:[", wallString, "]")
 	end
 	eb:SetText(serialized)
 end
 
 local function outputGuidanceToEHH(directions, POIs, targetRoom, startingRoom)
-    local steps = (table.getn(directions)-1)
+	local steps = (table.getn(directions) - 1)
 
-    --print("Guiding from " .. tostring(startingRoom.poi_index) .. " to " .. tostring(targetRoom.poi_index))
+	--print("Guiding from " .. tostring(startingRoom.poi_index) .. " to " .. tostring(targetRoom.poi_index))
 
-	local dirLetters = {"N","E","S","W"}
-    local navString = "" .. EHHPOIStrings[startingRoom.poi_index]
+	local dirLetters = { "N", "E", "S", "W" }
+	local navString = "" .. EHHPOIStrings[startingRoom.poi_index]
 
 	if (targetRoom.poi_index == 11) then
-        print("Error, EHH does not care about unexplored rooms")
-        return
+		print("Error, EHH does not care about unexplored rooms")
+		return
 	end
 
 	--directions[1] is always "0" due to a lazy design decision
-	for i=2,#directions do
-        navString = navString..dirLetters[directions[i]]
-        if (POIs[i] ~= 0) then
-            navString = navString .. EHHPOIStrings[POIs[i]]
-        end
+	for i = 2, #directions do
+		navString = navString .. dirLetters[directions[i]]
+		if (POIs[i] ~= 0) then
+			navString = navString .. EHHPOIStrings[POIs[i]]
+		end
 	end
 
-    print(navString)
-    EHH_Directions = EHH_Directions .. navString .. "\n"
+	print(navString)
+	EHH_Directions = EHH_Directions .. navString .. "\n"
 end
 
 local function outputGuidance(directions)
+	local steps = (table.getn(directions) - 1)
 
-    local steps = (table.getn(directions)-1)
-
-    local navString = ""
+	local navString = ""
 
 	if (navtarget == 11) then
 		if (steps ~= 1) then
-			print ("Hello, user!  I have detected an unexplored room ",steps," steps from here!")
+			print("Hello, user!  I have detected an unexplored room ", steps, " steps from here!")
 		else
-			navString = navString.."Unexplored room: "
+			navString = navString .. "Unexplored room: "
 		end
 	else
 		if (steps ~= 1) then
@@ -953,26 +1096,26 @@ local function outputGuidance(directions)
 
 			if (navtarget > 5) then
 				destStr = color_strings[navtarget - 5]
-				destStr = destStr.." Orb"
+				destStr = destStr .. " Orb"
 			elseif (navtarget > 0) then
 				destStr = color_strings[navtarget]
-				destStr = destStr.." Rune"
+				destStr = destStr .. " Rune"
 			end
 
-			print ("Hello, user!  I have detected your destination ("..destStr..") ",steps," steps from here!")
+			print("Hello, user!  I have detected your destination (" .. destStr .. ") ", steps, " steps from here!")
 		end
 	end
 
 	--directions[1] is always "0" due to a lazy design decision
-	for i=2,4 do
+	for i = 2, 4 do
 		if (directions[i] == nil) then
-			navString = navString.."You will have arrived at your destination!"
+			navString = navString .. "You will have arrived at your destination!"
 			break
 		end
-		navString = navString.."Go "..direction_strings[directions[i]]..", then "
+		navString = navString .. "Go " .. direction_strings[directions[i]] .. ", then "
 
 		if (i == 4) then
-			navString = navString.."..."
+			navString = navString .. "..."
 		end
 	end
 
@@ -980,64 +1123,57 @@ local function outputGuidance(directions)
 end
 
 local function navigateToUnexplored()
-
-	-- perform a depth-first traversal until you encounter an unexplored room
+	-- perform a breadth-first traversal until you encounter an unexplored room
 	-- and then print out directions to it for the user
-	local roomstack = {}
-	local roomstacksize = 0
-	local directionsStack = {}
+	local queue = {}
+	local qHead = 1
+	local qTail = 0
 
 	resetVisited()
 
-	-- PERFORMANCE WARNING!!! This Lua table is actually
-	-- some sort of bloated associative array, NOT a normal stack
-	table.insert(roomstack, current_room)
-	roomstacksize = roomstacksize + 1
+	-- Seed the queue with the starting room.
+	-- Each entry bundles the room and the direction path taken to reach it,
+	-- so we avoid two parallel arrays and O(n) front-removal.
+	qTail = qTail + 1
+	queue[qTail] = { room = current_room, directions = { 0 } }
 
-	-- Directions: 0 is the starting point,
-	-- after that it's an array of directions taken to get
-	-- to the current room
-	local tempDirections = {0}
-	table.insert(directionsStack, tempDirections)
+	while qHead <= qTail do
+		local entry = queue[qHead]
+		queue[qHead] = nil -- release reference for GC
+		qHead = qHead + 1
 
-	while (roomstacksize > 0) do
+		local cur = entry.room
+		if not cur.visited then
+			cur.visited = true
+			local tempDirections = entry.directions
 
-		local cur = table.remove(roomstack, 1)
-		roomstacksize = roomstacksize - 1
-		cur.visited = true
+			for i = 1, 4 do
+				if not cur.walls[i] then
+					local newDirections = {}
+					for k, v in pairs(tempDirections) do
+						newDirections[k] = v
+					end
+					newDirections[#newDirections + 1] = i
 
-		local tempDirections = table.remove(directionsStack, 1)
-
-		for i=1,4 do
-			if (not cur.walls[i]) then
-
-				local newDirections = {}
-				for k,v in pairs(tempDirections) do
-					newDirections[k] = v
-				end
-				newDirections[#newDirections+1] = i
-
-				local n = cur.neighbors[i]
-				if (n == nil) then
-					outputGuidance(newDirections)
-					return
-				else
-					if (not n.visited) then
-						table.insert(roomstack, n)
-						roomstacksize = roomstacksize + 1
-						table.insert(directionsStack, newDirections)
+					local n = cur.neighbors[i]
+					if n == nil then
+						outputGuidance(newDirections)
+						return
+					elseif not n.visited then
+						qTail = qTail + 1
+						queue[qTail] = { room = n, directions = newDirections }
 					end
 				end
 			end
 		end
 	end
 
-	print ("Hmm, that's odd, according to this you have no unexplored territory.. maybe try navigating to some other point of interest and check the wall settings on your way ")
+	print(
+		"Hmm, that's odd, according to this you have no unexplored territory.. maybe try navigating to some other point of interest and check the wall settings on your way ")
 end
 
 -- Navigates to global "navtarget"
 local function navigateToTarget(targetRoom, startingRoom)
-
 	if (targetRoom == nil or startingRoom == nil) then
 		return
 	end
@@ -1045,93 +1181,75 @@ local function navigateToTarget(targetRoom, startingRoom)
 	-- NOTE: It would be much faster in this case to simultaneously
 	-- spider out from both targetRoom and startingRoom at the same
 	-- time, then return the directions for where they meet
-	-- I don't feel like bothering to chew through all that coding,
-	-- though, so I'm going to take the extra half-assed approach
-	-- and just do a normal breadth-first traversal starting at
-	-- startingRoom, without even bothering to cache the results or
-	-- anything (: D
 
-    -- Sorry about the horribly sloppy queue, I was too lazy
-    -- to figure out how to make a functional class to bundle
-    -- up the data, start/end indices, and init/empty/push/pop methods
-
-    -- also sorry about the parallel queue for POIs and directions,
-    -- needed the POI state for exporting to EHH
-    local directionsQueue = {}
-    local poiQueue = {}
+	-- BFS using a single queue of parent-pointer nodes.
+	-- Each node stores {room, parent, dir, poi} forming a singly-linked list
+	-- back to the start.  When the target is found we walk that list once to
+	-- reconstruct the directions array — no per-step array copies needed.
 
 	resetVisited()
-
-	local roomQueue = {}
-	local rq1 = 1
-	local rq2 = 1
-
-	local dq1 = 1
-    local dq2 = 1
-    
-    local poi1 = 1
-    local poi2 = 1
-
-	rq1, rq2 = luaSucksQueueInit(roomQueue, rq1, rq2)
-	dq1, dq2 = luaSucksQueueInit(directionsQueue, dq1, dq2)
-	poi1, poi2 = luaSucksQueueInit(poiQueue, poi1, poi2)
-
 	resetVisitedKludge()
 
-	local tempDirections = {0}
-	local tempPOI = {0}
+	local queue = {}
+	local qHead = 1
+	local qTail = 0
 
-	rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, startingRoom)
-	dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, tempDirections)
-	poi1, poi2 = luaSucksQueuePush(poiQueue, poi1, poi2, tempPOI)
+	-- Seed: sentinel node for the starting room (parent = nil, dir = 0)
+	qTail = qTail + 1
+	queue[qTail] = { room = startingRoom, parent = nil, dir = 0, poi = 0 }
 
-	while (not luaSucksQueueEmpty(roomQueue, rq1, rq2)) do
-        local cur
-		dq1, dq2, tempDirections = luaSucksQueuePop(directionsQueue, dq1, dq2)
-		rq1, rq2, cur = luaSucksQueuePop(roomQueue, rq1, rq2)
-        poi1, poi2, tempPOI = luaSucksQueuePop(poiQueue, poi1, poi2)
+	while qHead <= qTail do
+		local node = queue[qHead]
+		queue[qHead] = nil  -- release reference for GC
+		qHead = qHead + 1
 
+		local cur = node.room
 		if (not cur.visited) then
 			cur.visited = true
 
-			for i=1,4 do
-				local newDirections = {}
-                local newPOIs = {}
-
+			for i = 1, 4 do
 				local n = cur.neighbors[i]
-				local n2 = nil
 				if (n ~= nil and cur.walls[i] == false) then
-					for k,v in pairs(tempDirections) do
-						newDirections[k] = v
-					end
-                    newDirections[#newDirections+1] = i
-
-                    for k,v in pairs(tempPOI) do
-                        newPOIs[k] = v
-                    end
-                    newPOIs[#newPOIs+1] = n.poi_index
+					local childNode = { room = n, parent = node, dir = i, poi = n.poi_index }
 
 					if (n == targetRoom) then
-						--Found it!
-                        -- hoo boy, starting to regret all the global variables
-                        -- I used instead of proper parameters..
-                        if (Exporting_To_EHH) then
-                            outputGuidanceToEHH(newDirections, newPOIs, targetRoom, startingRoom)
-                        else
-                            outputGuidance(newDirections)
-                        end
+						-- Found it!  Reconstruct directions by walking parent pointers.
+						-- Build in reverse, then flip — avoids O(n) table.insert(_, 1, _).
+						local revDirs = {}
+						local revPOIs = {}
+						local step = childNode
+						while step.parent ~= nil do
+							revDirs[#revDirs + 1] = step.dir
+							revPOIs[#revPOIs + 1] = step.poi
+							step = step.parent
+						end
+
+						local directions = { 0 }
+						local poiList    = { 0 }
+						for j = #revDirs, 1, -1 do
+							directions[#directions + 1] = revDirs[j]
+							poiList[#poiList + 1]    = revPOIs[j]
+						end
+
+						if (Exporting_To_EHH) then
+							outputGuidanceToEHH(directions, poiList, targetRoom, startingRoom)
+						else
+							outputGuidance(directions)
+						end
 						return
 					end
 
-					rq1, rq2 = luaSucksQueuePush(roomQueue, rq1, rq2, n)
-                    dq1, dq2 = luaSucksQueuePush(directionsQueue, dq1, dq2, newDirections)
-                    poi1, poi2 = luaSucksQueuePush(poiQueue, poi1, poi2, newPOIs)
-				end
-			end
-		end
-    end
+					if (not n.visited) then
+						qTail = qTail + 1
+						queue[qTail] = childNode
+					end
+				end  -- if n ~= nil
+			end  -- for i = 1, 4
+		end  -- if not cur.visited
+	end  -- while
 
-    print("No route from current room to target found, keep wandering until you hit a known POI so you can reattach to the rest of the map")
+	print(
+	"No route from current room to target found, keep wandering until you hit a known POI so you can reattach to the rest of the map")
 end
 
 local function navigate()
@@ -1146,24 +1264,25 @@ local function navigate()
 end
 
 function hitTheTrap()
-    local prevRoom = current_room.neighbors[getOppositeDir(last_dir)]
-    prevRoom.neighbors[last_dir] = nil
-    prevRoom.walls[last_dir] = true
-    print("Looks like room " .. prevRoom.index .. "'s " .. direction_strings[last_dir] .. " exit led to the trap.  Marking it as a wall" )
+	local prevRoom = current_room.neighbors[getOppositeDir(last_dir)]
+	prevRoom.neighbors[last_dir] = nil
+	prevRoom.walls[last_dir] = true
+	print("Looks like room " ..
+		prevRoom.index .. "'s " .. direction_strings[last_dir] .. " exit led to the trap.  Marking it as a wall")
 
-    recolorRoom(prevRoom)
+	recolorRoom(prevRoom)
 
-    current_room.neighbors[getOppositeDir(last_dir)] = nil
+	current_room.neighbors[getOppositeDir(last_dir)] = nil
 
-    local r = newRoom()
-    local dx, dy = 0, 0
-    dy = buttonH + 5
+	local r = newRoom()
+	local dx, dy = 0, 0
+	dy = buttonH + 5
 	local offsetX, offsetY = dx, dy
 	while true do
 		local found
 
 		-- Keep from drawing rooms on top of each other on the map
-		for k,v in pairs(rooms) do
+		for k, v in pairs(rooms) do
 			if v.x == current_room.x + offsetX and v.y == current_room.y + offsetY then
 				offsetX = offsetX + dx
 				offsetY = offsetY + dy
@@ -1182,55 +1301,55 @@ function hitTheTrap()
 	createButton(r)
 
 	setRoomNumber(r)
-    setCurrentRoom(r)
+	setCurrentRoom(r)
 end
 
 pois = {}
 function exportEHH()
-    Exporting_To_EHH = true
-    EHH_Directions = ""
-    pois = {}
-    for i=1,10 do
-        if (poirooms[i] ~= nil) then
-            pois[#pois+1] = i
-        end
-    end
-    if (#pois < 2) then
-        print("Error, could not export to EndlessHallsHelper because fewer than 2 POIs have been found")
-        return
-    end
+	Exporting_To_EHH = true
+	EHH_Directions = ""
+	pois = {}
+	for i = 1, 10 do
+		if (poirooms[i] ~= nil) then
+			pois[#pois + 1] = i
+		end
+	end
+	if (#pois < 2) then
+		print("Error, could not export to EndlessHallsHelper because fewer than 2 POIs have been found")
+		return
+	end
 
-    -- local i = 1
-    -- local targetRoom = pois[i]
-    -- i = i + 1
-    -- local startingRoom = pois[i]
-    -- while (true) do
-    --     navigateToTarget(poirooms[targetRoom], poirooms[startingRoom])
-    --     targetRoom = startingRoom
-    --     i = i + 1
-    --     if (i > #pois) then
-    --         break
-    --     end
-    --     startingRoom = pois[i]
-    -- end
+	-- local i = 1
+	-- local targetRoom = pois[i]
+	-- i = i + 1
+	-- local startingRoom = pois[i]
+	-- while (true) do
+	--     navigateToTarget(poirooms[targetRoom], poirooms[startingRoom])
+	--     targetRoom = startingRoom
+	--     i = i + 1
+	--     if (i > #pois) then
+	--         break
+	--     end
+	--     startingRoom = pois[i]
+	-- end
 
-    for i=1,9 do
-        for j=i+1,10 do
-            if (i ~= j) then
-                local targetRoom = pois[j]
-                local startingRoom = pois[i]
-                navigateToTarget(poirooms[targetRoom], poirooms[startingRoom])
-            end
-        end
-    end
+	for i = 1, 9 do
+		for j = i + 1, 10 do
+			if (i ~= j) then
+				local targetRoom = pois[j]
+				local startingRoom = pois[i]
+				navigateToTarget(poirooms[targetRoom], poirooms[startingRoom])
+			end
+		end
+	end
 
-    print("Routes for EndlessHallsHelper have been exported to the tiny box in the lower left corner.  Hit CTRL+A and CTRL+C to copy it, then paste into the box on nightswimmer.github.io/EndlessHalls to generate a cool map.  If the page returns an error, one or more of the routes probably includes a teleport trap, so try deleting them one at a time.")
-    eb:SetText(EHH_Directions)
-    Exporting_To_EHH = false
+	print(
+		"Routes for EndlessHallsHelper have been exported to the tiny box in the lower left corner.  Hit CTRL+A and CTRL+C to copy it, then paste into the box on nightswimmer.github.io/EndlessHalls to generate a cool map.  If the page returns an error, one or more of the routes probably includes a teleport trap, so try deleting them one at a time.")
+	eb:SetText(EHH_Directions)
+	Exporting_To_EHH = false
 end
 
 local function setGuidanceClick(self)
-
 	if (self.target == 11) then
 		navtarget = 11
 		updateNavButtonText()
@@ -1256,10 +1375,10 @@ local function setWallClick(self)
 	current_room.walls[self.dir] = not current_room.walls[self.dir]
 	recolorRoom(current_room)
 	updateWallButtonText()
+	navigateKludge()
 end
 
 local function initialize()
-
 	navigateKludge = navigate
 	resetVisitedKludge = resetVisited
 
@@ -1293,13 +1412,13 @@ local function initialize()
 	-- local reset = ng:New(addonName, "Button", nil, mf)
 	-- reset:SetPoint("BOTTOM", mf, "BOTTOM", -50, 10)
 	-- reset:SetScript("OnClick", ResetMap)
-    -- reset:SetText("Reset map")
+	-- reset:SetText("Reset map")
 
-    -- local TRAP = ng:New(addonName, "Button", nil, mf)
-    -- TRAP:SetPoint("BOTTOM", mf, "BOTTOM", -50, 10)
-    -- TRAP:SetScript("OnClick", print)
+	-- local TRAP = ng:New(addonName, "Button", nil, mf)
+	-- TRAP:SetPoint("BOTTOM", mf, "BOTTOM", -50, 10)
+	-- TRAP:SetScript("OnClick", print)
 
-	for i = 1,5 do
+	for i = 1, 5 do
 		local btn = ng:New(addonName, "Button", nil, mf)
 		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 10, -20 * i)
 		btn:SetSize(90, 18)
@@ -1307,7 +1426,7 @@ local function initialize()
 		btn.c = i
 		btn.poi_index = i
 		btn:SetScript("OnClick", setPOIClick)
-		btn:SetText(color_strings[i].." Rune")
+		btn:SetText(color_strings[i] .. " Rune")
 		btn:SetFrameLevel(5)
 
 		btn = ng:New(addonName, "Button", nil, mf)
@@ -1315,16 +1434,16 @@ local function initialize()
 		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 110, -20 * i)
 		btn.t = "orb"
 		btn.c = i
-		btn.poi_index = i+5
+		btn.poi_index = i + 5
 		btn:SetScript("OnClick", setPOIClick)
-		btn:SetText(color_strings[i].." Orb")
+		btn:SetText(color_strings[i] .. " Orb")
 		btn:SetFrameLevel(5)
 
 		-- automatic waypoints maybe in future
 	end
 
 	-- Buttons to add/remove walls
-	for i = 1,4 do
+	for i = 1, 4 do
 		local btn = ng:New(addonName, "Button", nil, mf)
 		btn.dir = i
 		btn:SetScript("OnClick", setWallClick)
@@ -1341,22 +1460,22 @@ local function initialize()
 	wall_buttons[4]:SetPoint("TOPLEFT", mf, "TOPLEFT", 250, -40)
 	wall_buttons[4]:SetSize(100, 18)
 	wall_buttons[3]:SetPoint("TOPLEFT", mf, "TOPLEFT", 300, -60)
-    wall_buttons[3]:SetSize(100, 18)
-    
-    local btn = ng:New(addonName, "Button", nil, mf)
-    btn:SetScript("OnClick", hitTheTrap)
+	wall_buttons[3]:SetSize(100, 18)
+
+	local btn = ng:New(addonName, "Button", nil, mf)
+	btn:SetScript("OnClick", hitTheTrap)
 	btn:SetSize(120, 18)
-    btn:SetText("I just got ported!")
+	btn:SetText("I just got ported!")
 	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 420, -70)
 
 	--TODO: Figure out how to make a normal text label instead of a button
 	local btn = ng:New(addonName, "Button", nil, mf)
-	btn:SetSize(130,25)
-	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 )
+	btn:SetSize(130, 25)
+	btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20)
 	btn:SetText("Navigation Target:")
 	btn:SetFrameLevel(5)
 
-	for i=1,11 do
+	for i = 1, 11 do
 		local btn = ng:New(addonName, "Button", nil, mf)
 		btn.target = i
 		btn:SetScript("OnClick", setGuidanceClick)
@@ -1366,7 +1485,7 @@ local function initialize()
 		btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 550, -20 * i - 30)
 
 		if (i == 11) then
-			btn:SetSize(130,25)
+			btn:SetSize(130, 25)
 			btn:SetPoint("TOPLEFT", mf, "TOPLEFT", 530, -20 * i - 30)
 		end
 
@@ -1386,14 +1505,14 @@ local function initialize()
 	eb = ng:New(addonName, "Editbox", nil, mf)
 	eb:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 20, 20)
 	eb:SetSize(110, 18)
-    eb:SetText("CTRL+A, CTRL+C")
-    eb:SetMultiLine(true)
+	eb:SetText("CTRL+A, CTRL+C")
+	eb:SetMultiLine(true)
 
 	btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 150, 50)
 	btn:SetSize(120, 18)
 	btn:SetScript("OnClick", exportEHH)
-    btn:SetText("Export EHH Routes")
+	btn:SetText("Export EHH Routes")
 
 	btn = ng:New(addonName, "Button", nil, mf)
 	btn:SetPoint("BOTTOMLEFT", mf, "BOTTOMLEFT", 140, 30)
@@ -1420,14 +1539,20 @@ local function initialize()
 
 	--LucidNightmareNavigatorTooltip:SetOwner(_G["UIParent"],"ANCHOR_NONE")
 
-	print ("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
-	print ("-------------")
-	print("The addon is going to watch you and build a map in memory, but since it can't see runes, orbs, or walls, you're going to have to help it out by clicking the buttons to indicate which walls are passable and which have rubble, and which rooms have orbs/runes.")
-	print("Please don't pick up any runes or put them in any orbs until you've found all the runes and orbs with the addon's help.  If you get lost, the addon will guide you to the nearest unexplored path or you can ask it for directions to the nearest node/rune")
-	print("UPDATE OCT 2022: We now know that the maze is 2D, but there's a teleporter trap room.  That means that going into that room will drop you into a random spot on the map")
-	print("Unfortunately old Wonderpants isn't smart enough to figure out a good way to automatically detect that and deal with it, and I'm too lazy to put in a good workaround")
-	print("If you have trouble, I recommend that you use the addon's import/export function to save routes to and from various runes/orbs, then use those partial routes rather than assuming the whole map is OK.  Or you could backtrack across each route as you find it, and then when one backtracking fails, you know you've found the teleport trap.. hoo boy, sounds like a hassle")
-	print("(for what it's worth, I've cleared the maze over a dozen times even with the teleport trap screwing the map up, and it hasn't been TOO bad)")
+	print("Welcome to the Lucid Nightmare Maze Helper by Vildiesel and Wonderpants!")
+	print("-------------")
+	print(
+		"The addon is going to watch you and build a map in memory, but since it can't see runes, orbs, or walls, you're going to have to help it out by clicking the buttons to indicate which walls are passable and which have rubble, and which rooms have orbs/runes.")
+	print(
+		"Please don't pick up any runes or put them in any orbs until you've found all the runes and orbs with the addon's help.  If you get lost, the addon will guide you to the nearest unexplored path or you can ask it for directions to the nearest node/rune")
+	print(
+		"UPDATE OCT 2022: We now know that the maze is 2D, but there's a teleporter trap room.  That means that going into that room will drop you into a random spot on the map")
+	print(
+		"Unfortunately old Wonderpants isn't smart enough to figure out a good way to automatically detect that and deal with it, and I'm too lazy to put in a good workaround")
+	print(
+		"If you have trouble, I recommend that you use the addon's import/export function to save routes to and from various runes/orbs, then use those partial routes rather than assuming the whole map is OK.  Or you could backtrack across each route as you find it, and then when one backtracking fails, you know you've found the teleport trap.. hoo boy, sounds like a hassle")
+	print(
+		"(for what it's worth, I've cleared the maze over a dozen times even with the teleport trap screwing the map up, and it hasn't been TOO bad)")
 end
 
 -- slash command
