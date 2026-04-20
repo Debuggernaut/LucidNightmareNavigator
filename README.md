@@ -18,3 +18,4 @@ before grabbing any orbs and depositing them on any runes, the map will probably
 
 If someone's up to speed on their graph theory and has a good way to deal with the trap properly, post about it on the "Issues"
 section on https://github.com/Debuggernaut/LucidNightmareNavigator/issues and I'll implement it when I get a chance
+
