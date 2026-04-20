@@ -1398,6 +1398,7 @@ local function setWallClick(self)
 	current_room.walls[self.dir] = not current_room.walls[self.dir]
 	recolorRoom(current_room)
 	updateWallButtonText()
+	navigateKludge()
 end
 
 local function initialize()
